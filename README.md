@@ -1,15 +1,22 @@
 # Thrones of Combat
 
-Initial browser-game boilerplate for **Thrones of Combat**.
+**Thrones of Combat** is a browser-based 2D fighting-game project built with
+React, TypeScript, Vite, and Phaser 4. The current fighters and arena use
+placeholder shapes; they are not the final visual presentation.
 
-## Stack
+## Current status
 
-- React
-- TypeScript
-- Vite
-- Phaser 4
+**Phase 1 / MVP — Complete.** The game launches in a browser and includes a
+fighting arena, Player 1 movement, a basic attack, hit detection, damage,
+combat health bars, victory/defeat, and match restart. Player 2 is stationary
+and cannot attack in the MVP.
 
-React owns the surrounding web application. Phaser owns the real-time game loop and gameplay systems.
+## Controls
+
+- `A` — move Player 1 left
+- `D` — move Player 1 right
+- `J` — Player 1 basic attack
+- `R` — restart after the match ends
 
 ## Run locally
 
@@ -18,19 +25,20 @@ npm install
 npm run dev
 ```
 
-## Production build
+Validate the production build with:
 
 ```bash
 npm run build
 ```
 
-## Current milestone
+## Architecture
 
-**US-00 — Launch the Game**
+React owns the application shell and the Phaser container/lifecycle. Phaser owns
+the scenes, rendering, input, movement, combat, health, HUD, match state, and
+restart. Gameplay state stays inside Phaser.
 
-The application should render a Phaser canvas inside React and display the
-Thrones of Combat prototype title without blocking console errors.
+## Development status
 
-## Next milestone
-
-US-01 — Fighting Arena.
+Phase 2 is planned but not yet implemented. See the
+[Phase 2 — Fighter & Movement Foundation epic](docs/phase-2-epic.md) for its
+scope, user stories, and dependencies.
