@@ -6,6 +6,7 @@ const GROUND_Y = 600
 const GROUND_HEIGHT = 80
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
+const FACING_MARKER_SIZE = 12
 const PLAYER_MOVE_SPEED = 300
 const ATTACK_STARTUP_MS = 180
 const ATTACK_ACTIVE_MS = 220
@@ -21,10 +22,13 @@ const HUD_BAR_Y = 110
 const HUD_BAR_INSET = 4
 
 type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
+type Facing = 'left' | 'right'
 type Winner = 'PLAYER 1' | 'PLAYER 2'
 
 interface Fighter {
   container: Phaser.GameObjects.Container
+  facingMarker: Phaser.GameObjects.Rectangle
+  facing: Facing
   health: number
   attackState: AttackState
   attackPhaseElapsed: number
@@ -76,6 +80,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1')
     this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
+    this.updateFacing()
 
     this.attackArea = this.add
       .rectangle(
@@ -122,6 +127,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.moveFighter(this.playerOne, this.movementKeys.playerOne, delta)
     this.moveFighter(this.playerTwo, this.movementKeys.playerTwo, delta)
+    this.updateFacing()
 
     // Consume each key press even during an attack, so inputs are not queued.
     if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.playerOne.attackState === 'idle') {
@@ -154,6 +160,25 @@ export class CombatScene extends Phaser.Scene {
         ARENA_WIDTH - halfFighterWidth,
       )
     }
+  }
+
+  private updateFacing(): void {
+    const playerOneX = this.playerOne.container.x
+    const playerTwoX = this.playerTwo.container.x
+
+    if (playerOneX < playerTwoX) {
+      this.setFacing(this.playerOne, 'right')
+      this.setFacing(this.playerTwo, 'left')
+    } else if (playerOneX > playerTwoX) {
+      this.setFacing(this.playerOne, 'left')
+      this.setFacing(this.playerTwo, 'right')
+    }
+    // At equal X positions, keep the previous facing for both fighters.
+  }
+
+  private setFacing(fighter: Fighter, facing: Facing): void {
+    fighter.facing = facing
+    fighter.facingMarker.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE)
   }
 
   private advanceAttack(delta: number): void {
@@ -285,8 +310,19 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
+    // Temporary marker makes the fighter's gameplay-facing state visible.
+    const facingMarker = this.add.rectangle(
+      FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE,
+      -FIGHTER_HEIGHT / 4,
+      FACING_MARKER_SIZE,
+      FACING_MARKER_SIZE,
+      0xffd166,
+    )
+
     return {
-      container: this.add.container(x, fighterY, [body, name]),
+      container: this.add.container(x, fighterY, [body, name, facingMarker]),
+      facingMarker,
+      facing: 'right',
       health: PLAYER_MAX_HEALTH,
       attackState: 'idle',
       attackPhaseElapsed: 0,
