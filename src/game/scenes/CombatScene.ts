@@ -12,6 +12,8 @@ const ATTACK_ACTIVE_MS = 220
 const ATTACK_RECOVERY_MS = 300
 const ATTACK_AREA_WIDTH = 100
 const ATTACK_AREA_HEIGHT = 70
+const PLAYER_MAX_HEALTH = 100
+const BASIC_ATTACK_DAMAGE = 10
 
 type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 
@@ -23,6 +25,10 @@ export class CombatScene extends Phaser.Scene {
   private attackState: AttackState = 'idle'
   private attackPhaseElapsed = 0
   private attackHasHit = false
+  private health = {
+    playerOne: PLAYER_MAX_HEALTH,
+    playerTwo: PLAYER_MAX_HEALTH,
+  }
   private movementKeys!: {
     left: Phaser.Input.Keyboard.Key
     right: Phaser.Input.Keyboard.Key
@@ -154,7 +160,8 @@ export class CombatScene extends Phaser.Scene {
 
     if (Phaser.Geom.Intersects.RectangleToRectangle(attackBox, hurtBox)) {
       this.attackHasHit = true
-      console.log('Hit!')
+      this.health.playerTwo = Math.max(0, this.health.playerTwo - BASIC_ATTACK_DAMAGE)
+      console.log(`Hit! Player 2 HP: ${this.health.playerTwo}`)
     }
   }
 
