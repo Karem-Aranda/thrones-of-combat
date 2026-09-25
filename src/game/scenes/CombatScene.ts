@@ -21,6 +21,7 @@ const HUD_BAR_Y = 110
 const HUD_BAR_INSET = 4
 
 type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
+type Winner = 'PLAYER 1' | 'PLAYER 2'
 
 export class CombatScene extends Phaser.Scene {
   private playerOne!: Phaser.GameObjects.Container
@@ -32,6 +33,7 @@ export class CombatScene extends Phaser.Scene {
   private attackState: AttackState = 'idle'
   private attackPhaseElapsed = 0
   private attackHasHit = false
+  private winner: Winner | null = null
   private health = {
     playerOne: PLAYER_MAX_HEALTH,
     playerTwo: PLAYER_MAX_HEALTH,
@@ -95,6 +97,8 @@ export class CombatScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.winner) return
+
     let direction = 0
 
     if (this.movementKeys.left.isDown) {
@@ -140,6 +144,7 @@ export class CombatScene extends Phaser.Scene {
         this.attackArea.setVisible(true)
       } else if (this.attackState === 'active') {
         this.checkAttackHit()
+        if (this.winner) return
         if (this.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
         this.attackPhaseElapsed -= ATTACK_ACTIVE_MS
         this.attackState = 'recovery'
@@ -153,7 +158,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private checkAttackHit(): void {
-    if (this.attackHasHit) return
+    if (this.winner || this.attackHasHit) return
 
     // The attack area is local to Player 1; both rectangles need world coordinates.
     const attackBox = new Phaser.Geom.Rectangle(
@@ -174,7 +179,27 @@ export class CombatScene extends Phaser.Scene {
       this.health.playerTwo = Math.max(0, this.health.playerTwo - BASIC_ATTACK_DAMAGE)
       this.updateHealthBars()
       console.log(`Hit! Player 2 HP: ${this.health.playerTwo}`)
+      if (this.health.playerTwo === 0) {
+        this.endMatch('PLAYER 1')
+      }
     }
+  }
+
+  private endMatch(winner: Winner): void {
+    if (this.winner) return
+
+    this.winner = winner
+    this.attackArea.setVisible(false)
+    this.add
+      .text(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, `${this.winner} WINS`, {
+        fontFamily: 'Arial',
+        fontSize: '56px',
+        color: '#ffffff',
+        backgroundColor: '#111827',
+        padding: { x: 24, y: 16 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
   }
 
   private addHealthBar(
