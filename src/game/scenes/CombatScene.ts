@@ -14,6 +14,11 @@ const ATTACK_AREA_WIDTH = 100
 const ATTACK_AREA_HEIGHT = 70
 const PLAYER_MAX_HEALTH = 100
 const BASIC_ATTACK_DAMAGE = 10
+const HUD_BAR_WIDTH = 400
+const HUD_BAR_HEIGHT = 28
+const HUD_BAR_MARGIN = 80
+const HUD_BAR_Y = 110
+const HUD_BAR_INSET = 4
 
 type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 
@@ -22,6 +27,8 @@ export class CombatScene extends Phaser.Scene {
   private playerTwo!: Phaser.GameObjects.Container
   private attackKey!: Phaser.Input.Keyboard.Key
   private attackArea!: Phaser.GameObjects.Rectangle
+  private playerOneHealthFill!: Phaser.GameObjects.Rectangle
+  private playerTwoHealthFill!: Phaser.GameObjects.Rectangle
   private attackState: AttackState = 'idle'
   private attackPhaseElapsed = 0
   private attackHasHit = false
@@ -70,6 +77,10 @@ export class CombatScene extends Phaser.Scene {
       .setStrokeStyle(3, 0xffffff)
       .setVisible(false)
     this.playerOne.add(this.attackArea)
+
+    this.playerOneHealthFill = this.addHealthBar(HUD_BAR_MARGIN, 'P1', 0, 0x4cc9f0)
+    this.playerTwoHealthFill = this.addHealthBar(ARENA_WIDTH - HUD_BAR_MARGIN, 'P2', 1, 0xf72585)
+    this.updateHealthBars()
 
     const keyboard = this.input.keyboard
     if (!keyboard) {
@@ -161,8 +172,50 @@ export class CombatScene extends Phaser.Scene {
     if (Phaser.Geom.Intersects.RectangleToRectangle(attackBox, hurtBox)) {
       this.attackHasHit = true
       this.health.playerTwo = Math.max(0, this.health.playerTwo - BASIC_ATTACK_DAMAGE)
+      this.updateHealthBars()
       console.log(`Hit! Player 2 HP: ${this.health.playerTwo}`)
     }
+  }
+
+  private addHealthBar(
+    x: number,
+    label: string,
+    originX: number,
+    color: number,
+  ): Phaser.GameObjects.Rectangle {
+    this.add
+      .rectangle(x, HUD_BAR_Y, HUD_BAR_WIDTH, HUD_BAR_HEIGHT, 0x303443)
+      .setOrigin(originX, 0.5)
+      .setStrokeStyle(2, 0xffffff)
+      .setScrollFactor(0)
+
+    const fillX = x + (originX === 0 ? HUD_BAR_INSET : -HUD_BAR_INSET)
+    const fill = this.add
+      .rectangle(
+        fillX,
+        HUD_BAR_Y,
+        HUD_BAR_WIDTH - HUD_BAR_INSET * 2,
+        HUD_BAR_HEIGHT - HUD_BAR_INSET * 2,
+        color,
+      )
+      .setOrigin(originX, 0.5)
+      .setScrollFactor(0)
+
+    this.add
+      .text(x, HUD_BAR_Y - 36, label, {
+        fontFamily: 'Arial',
+        fontSize: '20px',
+        color: '#ffffff',
+      })
+      .setOrigin(originX, 0.5)
+      .setScrollFactor(0)
+
+    return fill
+  }
+
+  private updateHealthBars(): void {
+    this.playerOneHealthFill.scaleX = Phaser.Math.Clamp(this.health.playerOne / PLAYER_MAX_HEALTH, 0, 1)
+    this.playerTwoHealthFill.scaleX = Phaser.Math.Clamp(this.health.playerTwo / PLAYER_MAX_HEALTH, 0, 1)
   }
 
   private addFighter(x: number, color: number, label: string): Phaser.GameObjects.Container {
