@@ -31,6 +31,11 @@ interface Fighter {
   attackHasHit: boolean
 }
 
+interface MovementKeys {
+  left: Phaser.Input.Keyboard.Key
+  right: Phaser.Input.Keyboard.Key
+}
+
 export class CombatScene extends Phaser.Scene {
   private playerOne!: Fighter
   private playerTwo!: Fighter
@@ -41,8 +46,8 @@ export class CombatScene extends Phaser.Scene {
   private playerTwoHealthFill!: Phaser.GameObjects.Rectangle
   private winner: Winner | null = null
   private movementKeys!: {
-    left: Phaser.Input.Keyboard.Key
-    right: Phaser.Input.Keyboard.Key
+    playerOne: MovementKeys
+    playerTwo: MovementKeys
   }
 
   constructor() {
@@ -95,8 +100,14 @@ export class CombatScene extends Phaser.Scene {
     }
 
     this.movementKeys = {
-      left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      playerOne: {
+        left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+        right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      },
+      playerTwo: {
+        left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+        right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+      },
     }
     this.attackKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J)
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
@@ -109,26 +120,8 @@ export class CombatScene extends Phaser.Scene {
       return
     }
 
-    let direction = 0
-
-    if (this.movementKeys.left.isDown) {
-      direction -= 1
-    }
-
-    if (this.movementKeys.right.isDown) {
-      direction += 1
-    }
-
-    if (direction !== 0) {
-      const halfFighterWidth = FIGHTER_WIDTH / 2
-      const distance = direction * PLAYER_MOVE_SPEED * (delta / 1000)
-
-      this.playerOne.container.x = Phaser.Math.Clamp(
-        this.playerOne.container.x + distance,
-        halfFighterWidth,
-        ARENA_WIDTH - halfFighterWidth,
-      )
-    }
+    this.moveFighter(this.playerOne, this.movementKeys.playerOne, delta)
+    this.moveFighter(this.playerTwo, this.movementKeys.playerTwo, delta)
 
     // Consume each key press even during an attack, so inputs are not queued.
     if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.playerOne.attackState === 'idle') {
@@ -138,6 +131,29 @@ export class CombatScene extends Phaser.Scene {
     }
 
     this.advanceAttack(delta)
+  }
+
+  private moveFighter(fighter: Fighter, keys: MovementKeys, delta: number): void {
+    let direction = 0
+
+    if (keys.left.isDown) {
+      direction -= 1
+    }
+
+    if (keys.right.isDown) {
+      direction += 1
+    }
+
+    if (direction !== 0) {
+      const halfFighterWidth = FIGHTER_WIDTH / 2
+      const distance = direction * PLAYER_MOVE_SPEED * (delta / 1000)
+
+      fighter.container.x = Phaser.Math.Clamp(
+        fighter.container.x + distance,
+        halfFighterWidth,
+        ARENA_WIDTH - halfFighterWidth,
+      )
+    }
   }
 
   private advanceAttack(delta: number): void {
