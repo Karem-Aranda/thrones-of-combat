@@ -27,6 +27,7 @@ export class CombatScene extends Phaser.Scene {
   private playerOne!: Phaser.GameObjects.Container
   private playerTwo!: Phaser.GameObjects.Container
   private attackKey!: Phaser.Input.Keyboard.Key
+  private restartKey!: Phaser.Input.Keyboard.Key
   private attackArea!: Phaser.GameObjects.Rectangle
   private playerOneHealthFill!: Phaser.GameObjects.Rectangle
   private playerTwoHealthFill!: Phaser.GameObjects.Rectangle
@@ -48,6 +49,16 @@ export class CombatScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Scene restarts reuse this class instance, so reset gameplay fields here.
+    this.attackState = 'idle'
+    this.attackPhaseElapsed = 0
+    this.attackHasHit = false
+    this.winner = null
+    this.health = {
+      playerOne: PLAYER_MAX_HEALTH,
+      playerTwo: PLAYER_MAX_HEALTH,
+    }
+
     this.add
       .rectangle(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, ARENA_WIDTH, ARENA_HEIGHT, 0x14213d)
       .setDepth(-2)
@@ -94,10 +105,15 @@ export class CombatScene extends Phaser.Scene {
       right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
     this.attackKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J)
+    this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
   }
 
   update(_time: number, delta: number): void {
-    if (this.winner) return
+    const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey)
+    if (this.winner) {
+      if (restartPressed) this.scene.restart()
+      return
+    }
 
     let direction = 0
 
