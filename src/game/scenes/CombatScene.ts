@@ -17,10 +17,12 @@ type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 
 export class CombatScene extends Phaser.Scene {
   private playerOne!: Phaser.GameObjects.Container
+  private playerTwo!: Phaser.GameObjects.Container
   private attackKey!: Phaser.Input.Keyboard.Key
   private attackArea!: Phaser.GameObjects.Rectangle
   private attackState: AttackState = 'idle'
   private attackPhaseElapsed = 0
+  private attackHasHit = false
   private movementKeys!: {
     left: Phaser.Input.Keyboard.Key
     right: Phaser.Input.Keyboard.Key
@@ -48,7 +50,7 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0.5)
 
     this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1')
-    this.addFighter(1020, 0xf72585, 'PLAYER 2')
+    this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
 
     this.attackArea = this.add
       .rectangle(
@@ -101,6 +103,7 @@ export class CombatScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.attackState === 'idle') {
       this.attackState = 'startup'
       this.attackPhaseElapsed = 0
+      this.attackHasHit = false
     }
 
     this.advanceAttack(delta)
@@ -119,6 +122,7 @@ export class CombatScene extends Phaser.Scene {
         this.attackState = 'active'
         this.attackArea.setVisible(true)
       } else if (this.attackState === 'active') {
+        this.checkAttackHit()
         if (this.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
         this.attackPhaseElapsed -= ATTACK_ACTIVE_MS
         this.attackState = 'recovery'
@@ -128,6 +132,29 @@ export class CombatScene extends Phaser.Scene {
         this.attackPhaseElapsed = 0
         this.attackState = 'idle'
       }
+    }
+  }
+
+  private checkAttackHit(): void {
+    if (this.attackHasHit) return
+
+    // The attack area is local to Player 1; both rectangles need world coordinates.
+    const attackBox = new Phaser.Geom.Rectangle(
+      this.playerOne.x + this.attackArea.x - ATTACK_AREA_WIDTH / 2,
+      this.playerOne.y + this.attackArea.y - ATTACK_AREA_HEIGHT / 2,
+      ATTACK_AREA_WIDTH,
+      ATTACK_AREA_HEIGHT,
+    )
+    const hurtBox = new Phaser.Geom.Rectangle(
+      this.playerTwo.x - FIGHTER_WIDTH / 2,
+      this.playerTwo.y - FIGHTER_HEIGHT / 2,
+      FIGHTER_WIDTH,
+      FIGHTER_HEIGHT,
+    )
+
+    if (Phaser.Geom.Intersects.RectangleToRectangle(attackBox, hurtBox)) {
+      this.attackHasHit = true
+      console.log('Hit!')
     }
   }
 
