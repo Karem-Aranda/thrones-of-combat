@@ -7,9 +7,20 @@ const GROUND_HEIGHT = 80
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
 const PLAYER_MOVE_SPEED = 300
+const ATTACK_STARTUP_MS = 180
+const ATTACK_ACTIVE_MS = 220
+const ATTACK_RECOVERY_MS = 300
+const ATTACK_AREA_WIDTH = 100
+const ATTACK_AREA_HEIGHT = 70
+
+type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 
 export class CombatScene extends Phaser.Scene {
   private playerOne!: Phaser.GameObjects.Container
+  private attackKey!: Phaser.Input.Keyboard.Key
+  private attackArea!: Phaser.GameObjects.Rectangle
+  private attackState: AttackState = 'idle'
+  private attackPhaseElapsed = 0
   private movementKeys!: {
     left: Phaser.Input.Keyboard.Key
     right: Phaser.Input.Keyboard.Key
@@ -39,6 +50,19 @@ export class CombatScene extends Phaser.Scene {
     this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1')
     this.addFighter(1020, 0xf72585, 'PLAYER 2')
 
+    this.attackArea = this.add
+      .rectangle(
+        FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2,
+        0,
+        ATTACK_AREA_WIDTH,
+        ATTACK_AREA_HEIGHT,
+        0xffd166,
+        0.65,
+      )
+      .setStrokeStyle(3, 0xffffff)
+      .setVisible(false)
+    this.playerOne.add(this.attackArea)
+
     const keyboard = this.input.keyboard
     if (!keyboard) {
       throw new Error('Keyboard input is unavailable')
@@ -48,6 +72,7 @@ export class CombatScene extends Phaser.Scene {
       left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
+    this.attackKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J)
   }
 
   update(_time: number, delta: number): void {
@@ -61,18 +86,49 @@ export class CombatScene extends Phaser.Scene {
       direction += 1
     }
 
-    if (direction === 0) {
-      return
+    if (direction !== 0) {
+      const halfFighterWidth = FIGHTER_WIDTH / 2
+      const distance = direction * PLAYER_MOVE_SPEED * (delta / 1000)
+
+      this.playerOne.x = Phaser.Math.Clamp(
+        this.playerOne.x + distance,
+        halfFighterWidth,
+        ARENA_WIDTH - halfFighterWidth,
+      )
     }
 
-    const halfFighterWidth = FIGHTER_WIDTH / 2
-    const distance = direction * PLAYER_MOVE_SPEED * (delta / 1000)
+    // Consume each key press even during an attack, so inputs are not queued.
+    if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.attackState === 'idle') {
+      this.attackState = 'startup'
+      this.attackPhaseElapsed = 0
+    }
 
-    this.playerOne.x = Phaser.Math.Clamp(
-      this.playerOne.x + distance,
-      halfFighterWidth,
-      ARENA_WIDTH - halfFighterWidth,
-    )
+    this.advanceAttack(delta)
+  }
+
+  private advanceAttack(delta: number): void {
+    if (this.attackState === 'idle') return
+
+    this.attackPhaseElapsed += delta
+
+    // Carry excess time into the next phase when a frame spans a boundary.
+    while (this.attackState !== 'idle') {
+      if (this.attackState === 'startup') {
+        if (this.attackPhaseElapsed < ATTACK_STARTUP_MS) return
+        this.attackPhaseElapsed -= ATTACK_STARTUP_MS
+        this.attackState = 'active'
+        this.attackArea.setVisible(true)
+      } else if (this.attackState === 'active') {
+        if (this.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
+        this.attackPhaseElapsed -= ATTACK_ACTIVE_MS
+        this.attackState = 'recovery'
+        this.attackArea.setVisible(false)
+      } else {
+        if (this.attackPhaseElapsed < ATTACK_RECOVERY_MS) return
+        this.attackPhaseElapsed = 0
+        this.attackState = 'idle'
+      }
+    }
   }
 
   private addFighter(x: number, color: number, label: string): Phaser.GameObjects.Container {
