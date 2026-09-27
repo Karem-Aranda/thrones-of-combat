@@ -232,13 +232,14 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private applyDamage(defender: Fighter): void {
+    if (this.winner) return
+
     defender.health = Math.max(0, defender.health - BASIC_ATTACK_DAMAGE)
     this.updateHealthBars()
     const playerLabel = defender === this.playerOne ? 'Player 1' : 'Player 2'
     console.log(`Hit! ${playerLabel} HP: ${defender.health}`)
-    // Bilateral victory belongs to US-15; retain the existing P1 win condition.
-    if (defender === this.playerTwo && defender.health === 0) {
-      this.endMatch('PLAYER 1')
+    if (defender.health === 0) {
+      this.endMatch(defender === this.playerOne ? 'PLAYER 2' : 'PLAYER 1')
     }
   }
 
