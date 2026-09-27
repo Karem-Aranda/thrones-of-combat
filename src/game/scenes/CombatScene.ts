@@ -194,8 +194,7 @@ export class CombatScene extends Phaser.Scene {
         fighter.attackArea.setVisible(true)
       } else if (fighter.attackState === 'active') {
         const hit = this.checkAttackHit(fighter, defender)
-        // Both fighters register hits, but damage remains P1 → P2 until US-14.
-        if (hit && fighter === this.playerOne) this.applyPlayerOneDamage()
+        if (hit) this.applyDamage(defender)
         if (this.winner) return
         if (fighter.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
         fighter.attackPhaseElapsed -= ATTACK_ACTIVE_MS
@@ -232,11 +231,13 @@ export class CombatScene extends Phaser.Scene {
     return true
   }
 
-  private applyPlayerOneDamage(): void {
-    this.playerTwo.health = Math.max(0, this.playerTwo.health - BASIC_ATTACK_DAMAGE)
+  private applyDamage(defender: Fighter): void {
+    defender.health = Math.max(0, defender.health - BASIC_ATTACK_DAMAGE)
     this.updateHealthBars()
-    console.log(`Hit! Player 2 HP: ${this.playerTwo.health}`)
-    if (this.playerTwo.health === 0) {
+    const playerLabel = defender === this.playerOne ? 'Player 1' : 'Player 2'
+    console.log(`Hit! ${playerLabel} HP: ${defender.health}`)
+    // Bilateral victory belongs to US-15; retain the existing P1 win condition.
+    if (defender === this.playerTwo && defender.health === 0) {
       this.endMatch('PLAYER 1')
     }
   }
