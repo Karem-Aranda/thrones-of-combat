@@ -124,8 +124,8 @@ export class CombatScene extends Phaser.Scene {
 
     this.tryStartAttack(this.playerOne, this.attackKeys.playerOne)
     this.tryStartAttack(this.playerTwo, this.attackKeys.playerTwo)
-    this.advanceAttack(this.playerOne, delta)
-    this.advanceAttack(this.playerTwo, delta)
+    this.advanceAttack(this.playerOne, this.playerTwo, delta)
+    this.advanceAttack(this.playerTwo, this.playerOne, delta)
   }
 
   private moveFighter(fighter: Fighter, keys: MovementKeys, delta: number): void {
@@ -168,6 +168,7 @@ export class CombatScene extends Phaser.Scene {
   private setFacing(fighter: Fighter, facing: Facing): void {
     fighter.facing = facing
     fighter.facingMarker.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE)
+    fighter.attackArea.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2)
   }
 
   private tryStartAttack(fighter: Fighter, key: Phaser.Input.Keyboard.Key): void {
@@ -179,7 +180,7 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private advanceAttack(fighter: Fighter, delta: number): void {
+  private advanceAttack(fighter: Fighter, defender: Fighter, delta: number): void {
     if (this.winner || fighter.attackState === 'idle') return
 
     fighter.attackPhaseElapsed += delta
@@ -192,8 +193,9 @@ export class CombatScene extends Phaser.Scene {
         fighter.attackState = 'active'
         fighter.attackArea.setVisible(true)
       } else if (fighter.attackState === 'active') {
-        // US-12 adds P2 attack progression only; hit/damage remains P1 → P2.
-        if (fighter === this.playerOne) this.checkAttackHit()
+        const hit = this.checkAttackHit(fighter, defender)
+        // Both fighters register hits, but damage remains P1 → P2 until US-14.
+        if (hit && fighter === this.playerOne) this.applyPlayerOneDamage()
         if (this.winner) return
         if (fighter.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
         fighter.attackPhaseElapsed -= ATTACK_ACTIVE_MS
@@ -207,31 +209,35 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private checkAttackHit(): void {
-    if (this.winner || this.playerOne.attackHasHit) return
+  private checkAttackHit(attacker: Fighter, defender: Fighter): boolean {
+    if (this.winner || attacker.attackState !== 'active' || attacker.attackHasHit) return false
 
-    // The attack area is local to Player 1; both rectangles need world coordinates.
+    // Use the facing-positioned visualization for identical world-space geometry.
     const attackBox = new Phaser.Geom.Rectangle(
-      this.playerOne.container.x + this.playerOne.attackArea.x - ATTACK_AREA_WIDTH / 2,
-      this.playerOne.container.y + this.playerOne.attackArea.y - ATTACK_AREA_HEIGHT / 2,
+      attacker.container.x + attacker.attackArea.x - ATTACK_AREA_WIDTH / 2,
+      attacker.container.y + attacker.attackArea.y - ATTACK_AREA_HEIGHT / 2,
       ATTACK_AREA_WIDTH,
       ATTACK_AREA_HEIGHT,
     )
     const hurtBox = new Phaser.Geom.Rectangle(
-      this.playerTwo.container.x - FIGHTER_WIDTH / 2,
-      this.playerTwo.container.y - FIGHTER_HEIGHT / 2,
+      defender.container.x - FIGHTER_WIDTH / 2,
+      defender.container.y - FIGHTER_HEIGHT / 2,
       FIGHTER_WIDTH,
       FIGHTER_HEIGHT,
     )
 
-    if (Phaser.Geom.Intersects.RectangleToRectangle(attackBox, hurtBox)) {
-      this.playerOne.attackHasHit = true
-      this.playerTwo.health = Math.max(0, this.playerTwo.health - BASIC_ATTACK_DAMAGE)
-      this.updateHealthBars()
-      console.log(`Hit! Player 2 HP: ${this.playerTwo.health}`)
-      if (this.playerTwo.health === 0) {
-        this.endMatch('PLAYER 1')
-      }
+    if (!Phaser.Geom.Intersects.RectangleToRectangle(attackBox, hurtBox)) return false
+
+    attacker.attackHasHit = true
+    return true
+  }
+
+  private applyPlayerOneDamage(): void {
+    this.playerTwo.health = Math.max(0, this.playerTwo.health - BASIC_ATTACK_DAMAGE)
+    this.updateHealthBars()
+    console.log(`Hit! Player 2 HP: ${this.playerTwo.health}`)
+    if (this.playerTwo.health === 0) {
+      this.endMatch('PLAYER 1')
     }
   }
 
@@ -319,7 +325,7 @@ export class CombatScene extends Phaser.Scene {
       0xffd166,
     )
 
-    // Fixed-right temporary visualization; directional geometry belongs to US-13.
+    // setFacing positions this temporary area on the fighter's facing side.
     const attackArea = this.add
       .rectangle(
         FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2,
