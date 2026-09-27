@@ -27,6 +27,7 @@ type Winner = 'PLAYER 1' | 'PLAYER 2'
 
 interface Fighter {
   container: Phaser.GameObjects.Container
+  attackArea: Phaser.GameObjects.Rectangle
   facingMarker: Phaser.GameObjects.Rectangle
   facing: Facing
   health: number
@@ -43,9 +44,11 @@ interface MovementKeys {
 export class CombatScene extends Phaser.Scene {
   private playerOne!: Fighter
   private playerTwo!: Fighter
-  private attackKey!: Phaser.Input.Keyboard.Key
+  private attackKeys!: {
+    playerOne: Phaser.Input.Keyboard.Key
+    playerTwo: Phaser.Input.Keyboard.Key
+  }
   private restartKey!: Phaser.Input.Keyboard.Key
-  private attackArea!: Phaser.GameObjects.Rectangle
   private playerOneHealthFill!: Phaser.GameObjects.Rectangle
   private playerTwoHealthFill!: Phaser.GameObjects.Rectangle
   private winner: Winner | null = null
@@ -82,19 +85,6 @@ export class CombatScene extends Phaser.Scene {
     this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
     this.updateFacing()
 
-    this.attackArea = this.add
-      .rectangle(
-        FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2,
-        0,
-        ATTACK_AREA_WIDTH,
-        ATTACK_AREA_HEIGHT,
-        0xffd166,
-        0.65,
-      )
-      .setStrokeStyle(3, 0xffffff)
-      .setVisible(false)
-    this.playerOne.container.add(this.attackArea)
-
     this.playerOneHealthFill = this.addHealthBar(HUD_BAR_MARGIN, 'P1', 0, 0x4cc9f0)
     this.playerTwoHealthFill = this.addHealthBar(ARENA_WIDTH - HUD_BAR_MARGIN, 'P2', 1, 0xf72585)
     this.updateHealthBars()
@@ -114,7 +104,10 @@ export class CombatScene extends Phaser.Scene {
         right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
       },
     }
-    this.attackKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J)
+    this.attackKeys = {
+      playerOne: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
+      playerTwo: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
+    }
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
   }
 
@@ -129,14 +122,10 @@ export class CombatScene extends Phaser.Scene {
     this.moveFighter(this.playerTwo, this.movementKeys.playerTwo, delta)
     this.updateFacing()
 
-    // Consume each key press even during an attack, so inputs are not queued.
-    if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.playerOne.attackState === 'idle') {
-      this.playerOne.attackState = 'startup'
-      this.playerOne.attackPhaseElapsed = 0
-      this.playerOne.attackHasHit = false
-    }
-
-    this.advanceAttack(delta)
+    this.tryStartAttack(this.playerOne, this.attackKeys.playerOne)
+    this.tryStartAttack(this.playerTwo, this.attackKeys.playerTwo)
+    this.advanceAttack(this.playerOne, delta)
+    this.advanceAttack(this.playerTwo, delta)
   }
 
   private moveFighter(fighter: Fighter, keys: MovementKeys, delta: number): void {
@@ -181,29 +170,39 @@ export class CombatScene extends Phaser.Scene {
     fighter.facingMarker.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE)
   }
 
-  private advanceAttack(delta: number): void {
-    if (this.playerOne.attackState === 'idle') return
+  private tryStartAttack(fighter: Fighter, key: Phaser.Input.Keyboard.Key): void {
+    // Consume each key press even during an attack, so inputs are not queued.
+    if (Phaser.Input.Keyboard.JustDown(key) && fighter.attackState === 'idle') {
+      fighter.attackState = 'startup'
+      fighter.attackPhaseElapsed = 0
+      fighter.attackHasHit = false
+    }
+  }
 
-    this.playerOne.attackPhaseElapsed += delta
+  private advanceAttack(fighter: Fighter, delta: number): void {
+    if (this.winner || fighter.attackState === 'idle') return
+
+    fighter.attackPhaseElapsed += delta
 
     // Carry excess time into the next phase when a frame spans a boundary.
-    while (this.playerOne.attackState !== 'idle') {
-      if (this.playerOne.attackState === 'startup') {
-        if (this.playerOne.attackPhaseElapsed < ATTACK_STARTUP_MS) return
-        this.playerOne.attackPhaseElapsed -= ATTACK_STARTUP_MS
-        this.playerOne.attackState = 'active'
-        this.attackArea.setVisible(true)
-      } else if (this.playerOne.attackState === 'active') {
-        this.checkAttackHit()
+    while (fighter.attackState !== 'idle') {
+      if (fighter.attackState === 'startup') {
+        if (fighter.attackPhaseElapsed < ATTACK_STARTUP_MS) return
+        fighter.attackPhaseElapsed -= ATTACK_STARTUP_MS
+        fighter.attackState = 'active'
+        fighter.attackArea.setVisible(true)
+      } else if (fighter.attackState === 'active') {
+        // US-12 adds P2 attack progression only; hit/damage remains P1 → P2.
+        if (fighter === this.playerOne) this.checkAttackHit()
         if (this.winner) return
-        if (this.playerOne.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
-        this.playerOne.attackPhaseElapsed -= ATTACK_ACTIVE_MS
-        this.playerOne.attackState = 'recovery'
-        this.attackArea.setVisible(false)
+        if (fighter.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
+        fighter.attackPhaseElapsed -= ATTACK_ACTIVE_MS
+        fighter.attackState = 'recovery'
+        fighter.attackArea.setVisible(false)
       } else {
-        if (this.playerOne.attackPhaseElapsed < ATTACK_RECOVERY_MS) return
-        this.playerOne.attackPhaseElapsed = 0
-        this.playerOne.attackState = 'idle'
+        if (fighter.attackPhaseElapsed < ATTACK_RECOVERY_MS) return
+        fighter.attackPhaseElapsed = 0
+        fighter.attackState = 'idle'
       }
     }
   }
@@ -213,8 +212,8 @@ export class CombatScene extends Phaser.Scene {
 
     // The attack area is local to Player 1; both rectangles need world coordinates.
     const attackBox = new Phaser.Geom.Rectangle(
-      this.playerOne.container.x + this.attackArea.x - ATTACK_AREA_WIDTH / 2,
-      this.playerOne.container.y + this.attackArea.y - ATTACK_AREA_HEIGHT / 2,
+      this.playerOne.container.x + this.playerOne.attackArea.x - ATTACK_AREA_WIDTH / 2,
+      this.playerOne.container.y + this.playerOne.attackArea.y - ATTACK_AREA_HEIGHT / 2,
       ATTACK_AREA_WIDTH,
       ATTACK_AREA_HEIGHT,
     )
@@ -240,7 +239,8 @@ export class CombatScene extends Phaser.Scene {
     if (this.winner) return
 
     this.winner = winner
-    this.attackArea.setVisible(false)
+    this.playerOne.attackArea.setVisible(false)
+    this.playerTwo.attackArea.setVisible(false)
     this.add
       .text(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, `${this.winner} WINS`, {
         fontFamily: 'Arial',
@@ -319,8 +319,22 @@ export class CombatScene extends Phaser.Scene {
       0xffd166,
     )
 
+    // Fixed-right temporary visualization; directional geometry belongs to US-13.
+    const attackArea = this.add
+      .rectangle(
+        FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2,
+        0,
+        ATTACK_AREA_WIDTH,
+        ATTACK_AREA_HEIGHT,
+        0xffd166,
+        0.65,
+      )
+      .setStrokeStyle(3, 0xffffff)
+      .setVisible(false)
+
     return {
-      container: this.add.container(x, fighterY, [body, name, facingMarker]),
+      container: this.add.container(x, fighterY, [body, name, facingMarker, attackArea]),
+      attackArea,
       facingMarker,
       facing: 'right',
       health: PLAYER_MAX_HEALTH,
