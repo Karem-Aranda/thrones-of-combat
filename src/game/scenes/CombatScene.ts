@@ -6,6 +6,10 @@ const GROUND_Y = 600
 const GROUND_HEIGHT = 80
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
+// Static asset landmarks (source pixels), not gameplay dimensions.
+const JON_SNOW_TEXTURE_HEIGHT = 1374
+const JON_SNOW_HEAD_Y = 128
+const JON_SNOW_FOOT_Y = 1329
 const FACING_MARKER_SIZE = 12
 const PLAYER_MOVE_SPEED = 300
 const ATTACK_STARTUP_MS = 180
@@ -27,6 +31,7 @@ type Winner = 'PLAYER 1' | 'PLAYER 2'
 
 interface Fighter {
   container: Phaser.GameObjects.Container
+  visual?: Phaser.GameObjects.Image
   attackArea: Phaser.GameObjects.Rectangle
   facingMarker: Phaser.GameObjects.Rectangle
   facing: Facing
@@ -81,7 +86,7 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1')
+    this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1', 'jon-snow-guard')
     this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
     this.updateFacing()
 
@@ -167,6 +172,7 @@ export class CombatScene extends Phaser.Scene {
 
   private setFacing(fighter: Fighter, facing: Facing): void {
     fighter.facing = facing
+    fighter.visual?.setFlipX(facing === 'left')
     fighter.facingMarker.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE)
     fighter.attackArea.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2)
   }
@@ -302,13 +308,22 @@ export class CombatScene extends Phaser.Scene {
     this.playerTwoHealthFill.scaleX = Phaser.Math.Clamp(this.playerTwo.health / PLAYER_MAX_HEALTH, 0, 1)
   }
 
-  private addFighter(x: number, color: number, label: string): Fighter {
+  private addFighter(x: number, color: number, label: string, textureKey?: string): Fighter {
     const groundTop = GROUND_Y - GROUND_HEIGHT / 2
     const fighterY = groundTop - FIGHTER_HEIGHT / 2
 
-    const body = this.add
-      .rectangle(0, 0, FIGHTER_WIDTH, FIGHTER_HEIGHT, color)
-      .setStrokeStyle(4, 0xffffff)
+    // Match the illustrated head-to-foot height to the existing fighter height.
+    // Only the image flips: container position and collision geometry stay unchanged.
+    const visual = textureKey
+      ? this.add
+          .image(0, FIGHTER_HEIGHT / 2, textureKey)
+          .setOrigin(0.5, JON_SNOW_FOOT_Y / JON_SNOW_TEXTURE_HEIGHT)
+          .setScale(FIGHTER_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y))
+      : undefined
+    const body = visual ??
+      this.add
+        .rectangle(0, 0, FIGHTER_WIDTH, FIGHTER_HEIGHT, color)
+        .setStrokeStyle(4, 0xffffff)
 
     const name = this.add
       .text(0, -FIGHTER_HEIGHT / 2 - 24, label, {
@@ -319,13 +334,15 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0.5)
 
     // Temporary marker makes the fighter's gameplay-facing state visible.
-    const facingMarker = this.add.rectangle(
-      FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE,
-      -FIGHTER_HEIGHT / 4,
-      FACING_MARKER_SIZE,
-      FACING_MARKER_SIZE,
-      0xffd166,
-    )
+    const facingMarker = this.add
+      .rectangle(
+        FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE,
+        -FIGHTER_HEIGHT / 4,
+        FACING_MARKER_SIZE,
+        FACING_MARKER_SIZE,
+        0xffd166,
+      )
+      .setVisible(!visual)
 
     // setFacing positions this temporary area on the fighter's facing side.
     const attackArea = this.add
@@ -342,6 +359,7 @@ export class CombatScene extends Phaser.Scene {
 
     return {
       container: this.add.container(x, fighterY, [body, name, facingMarker, attackArea]),
+      visual,
       attackArea,
       facingMarker,
       facing: 'right',
