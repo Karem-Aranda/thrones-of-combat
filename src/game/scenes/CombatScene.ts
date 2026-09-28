@@ -10,6 +10,38 @@ const FIGHTER_HEIGHT = 140
 const JON_SNOW_TEXTURE_HEIGHT = 1374
 const JON_SNOW_HEAD_Y = 128
 const JON_SNOW_FOOT_Y = 1329
+const JON_IMAGE_SCALE = FIGHTER_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y)
+const JON_IDLE_FRAMES = [
+  'jon-snow-guard', 'jon-idle-2', 'jon-idle-3', 'jon-idle-2',
+  'jon-snow-guard', 'jon-idle-4', 'jon-snow-guard',
+]
+const JON_MOVE_FRAMES = [
+  'jon-move-1', 'jon-move-2', 'jon-move-3',
+  'jon-move-4', 'jon-move-5', 'jon-move-6',
+]
+const JON_IDLE_FRAME_MS = 300 // Seven poses over 2.1 seconds.
+const JON_MOVE_FRAME_MS = 100 // Six combat steps over 0.6 seconds.
+// Measured source-pixel sole lines. Each texture uses the same scale and world baseline.
+const JON_FRAME_SOLE_Y: Record<string, number> = {
+  'jon-snow-guard': 1329,
+  'jon-idle-2': 1330,
+  'jon-idle-3': 1330,
+  'jon-idle-4': 1330,
+  'jon-move-1': 1316,
+  'jon-move-2': 1322,
+  'jon-move-3': 1322,
+  'jon-move-4': 1324,
+  'jon-move-5': 1316,
+  'jon-move-6': 1324,
+  'jon-attack-s-1': 1324,
+  'jon-attack-s-2': 1328,
+  'jon-attack-a-1': 1256,
+  'jon-attack-a-2': 1285,
+  'jon-attack-a-3': 1262,
+  'jon-attack-r-1': 1280,
+  'jon-attack-r-2': 1322,
+  'jon-attack-r-3': 1329,
+}
 const FACING_MARKER_SIZE = 12
 const PLAYER_MOVE_SPEED = 300
 const ATTACK_STARTUP_MS = 180
@@ -28,6 +60,7 @@ const HUD_BAR_INSET = 4
 type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 type Facing = 'left' | 'right'
 type Winner = 'PLAYER 1' | 'PLAYER 2'
+type JonVisualMode = 'idle' | 'move-forward' | 'move-retreat' | 'attack'
 
 interface Fighter {
   container: Phaser.GameObjects.Container
@@ -57,6 +90,8 @@ export class CombatScene extends Phaser.Scene {
   private playerOneHealthFill!: Phaser.GameObjects.Rectangle
   private playerTwoHealthFill!: Phaser.GameObjects.Rectangle
   private winner: Winner | null = null
+  private jonVisualMode: JonVisualMode = 'idle'
+  private jonVisualElapsed = 0
   private movementKeys!: {
     playerOne: MovementKeys
     playerTwo: MovementKeys
@@ -69,6 +104,8 @@ export class CombatScene extends Phaser.Scene {
   create(): void {
     // Scene restarts reuse this class instance; new fighters reset their own state.
     this.winner = null
+    this.jonVisualMode = 'idle'
+    this.jonVisualElapsed = 0
 
     this.add
       .rectangle(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, ARENA_WIDTH, ARENA_HEIGHT, 0x14213d)
@@ -123,6 +160,7 @@ export class CombatScene extends Phaser.Scene {
       return
     }
 
+    const previousPlayerOneX = this.playerOne.container.x
     this.moveFighter(this.playerOne, this.movementKeys.playerOne, delta)
     this.moveFighter(this.playerTwo, this.movementKeys.playerTwo, delta)
     this.updateFacing()
@@ -131,6 +169,56 @@ export class CombatScene extends Phaser.Scene {
     this.tryStartAttack(this.playerTwo, this.attackKeys.playerTwo)
     this.advanceAttack(this.playerOne, this.playerTwo, delta)
     this.advanceAttack(this.playerTwo, this.playerOne, delta)
+    this.updateJonVisual(delta, this.playerOne.container.x - previousPlayerOneX)
+  }
+
+  private updateJonVisual(delta: number, movedX: number): void {
+    const visual = this.playerOne.visual
+    if (!visual) return
+
+    let mode: JonVisualMode
+    let frameKey: string
+    if (this.playerOne.attackState !== 'idle') {
+      mode = 'attack'
+      frameKey = this.getJonAttackFrame(this.playerOne)
+    } else {
+      mode = 'idle'
+      if (movedX !== 0) {
+        const movingForward = movedX * (this.playerOne.facing === 'right' ? 1 : -1) > 0
+        mode = movingForward ? 'move-forward' : 'move-retreat'
+      }
+
+      // Gameplay displacement, not key state, selects locomotion at boundaries.
+      this.jonVisualElapsed = mode === this.jonVisualMode ? this.jonVisualElapsed + delta : 0
+      if (mode === 'idle') {
+        const loopElapsed = this.jonVisualElapsed % (JON_IDLE_FRAMES.length * JON_IDLE_FRAME_MS)
+        const index = Math.floor(loopElapsed / JON_IDLE_FRAME_MS)
+        frameKey = JON_IDLE_FRAMES[index]
+      } else {
+        const loopElapsed = this.jonVisualElapsed % (JON_MOVE_FRAMES.length * JON_MOVE_FRAME_MS)
+        const index = Math.floor(loopElapsed / JON_MOVE_FRAME_MS)
+        frameKey = JON_MOVE_FRAMES[mode === 'move-retreat' ? JON_MOVE_FRAMES.length - 1 - index : index]
+      }
+    }
+
+    if (visual.texture.key !== frameKey) {
+      const soleY = JON_FRAME_SOLE_Y[frameKey]
+      if (soleY === undefined) throw new Error(`Missing Jon Snow frame baseline: ${frameKey}`)
+      visual.setTexture(frameKey)
+      visual.setOrigin(0.5, soleY / visual.height)
+    }
+    this.jonVisualMode = mode
+  }
+
+  private getJonAttackFrame(fighter: Fighter): string {
+    const elapsed = fighter.attackPhaseElapsed
+    if (fighter.attackState === 'startup') {
+      return elapsed < 90 ? 'jon-attack-s-1' : 'jon-attack-s-2'
+    }
+    if (fighter.attackState === 'active') {
+      return elapsed < 60 ? 'jon-attack-a-1' : elapsed < 160 ? 'jon-attack-a-2' : 'jon-attack-a-3'
+    }
+    return elapsed < 100 ? 'jon-attack-r-1' : elapsed < 200 ? 'jon-attack-r-2' : 'jon-attack-r-3'
   }
 
   private moveFighter(fighter: Fighter, keys: MovementKeys, delta: number): void {
@@ -318,7 +406,7 @@ export class CombatScene extends Phaser.Scene {
       ? this.add
           .image(0, FIGHTER_HEIGHT / 2, textureKey)
           .setOrigin(0.5, JON_SNOW_FOOT_Y / JON_SNOW_TEXTURE_HEIGHT)
-          .setScale(FIGHTER_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y))
+          .setScale(JON_IMAGE_SCALE)
       : undefined
     const body = visual ??
       this.add
