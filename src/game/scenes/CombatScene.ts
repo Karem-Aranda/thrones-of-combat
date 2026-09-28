@@ -21,6 +21,13 @@ const JON_MOVE_FRAMES = [
 ]
 const JON_IDLE_FRAME_MS = 300 // Seven poses over 2.1 seconds.
 const JON_MOVE_FRAME_MS = 100 // Six combat steps over 0.6 seconds.
+const JON_HIT_CONTACT_MS = 30
+const JON_HIT_RECOIL_MS = 60
+const JON_HIT_RETURN_MS = 90
+const JON_KO_IMPACT_MS = 70
+const JON_KO_COLLAPSE_MS = 330
+const JON_KO_TOTAL_MS = 400
+const IMPACT_CUE_MS = 80
 // Measured source-pixel sole lines. Each texture uses the same scale and world baseline.
 const JON_FRAME_SOLE_Y: Record<string, number> = {
   'jon-snow-guard': 1329,
@@ -41,6 +48,10 @@ const JON_FRAME_SOLE_Y: Record<string, number> = {
   'jon-attack-r-1': 1280,
   'jon-attack-r-2': 1322,
   'jon-attack-r-3': 1329,
+  'jon-hit-contact': 1348,
+  'jon-hit-recoil': 1348,
+  'jon-ko-collapse': 1326,
+  'jon-ko-hold': 1336,
 }
 const FACING_MARKER_SIZE = 12
 const PLAYER_MOVE_SPEED = 300
@@ -92,6 +103,10 @@ export class CombatScene extends Phaser.Scene {
   private winner: Winner | null = null
   private jonVisualMode: JonVisualMode = 'idle'
   private jonVisualElapsed = 0
+  private jonHitElapsed: number | null = null
+  private jonKoElapsed: number | null = null
+  private impactCue!: Phaser.GameObjects.Arc
+  private impactCueElapsed = IMPACT_CUE_MS
   private movementKeys!: {
     playerOne: MovementKeys
     playerTwo: MovementKeys
@@ -106,6 +121,9 @@ export class CombatScene extends Phaser.Scene {
     this.winner = null
     this.jonVisualMode = 'idle'
     this.jonVisualElapsed = 0
+    this.jonHitElapsed = null
+    this.jonKoElapsed = null
+    this.impactCueElapsed = IMPACT_CUE_MS
 
     this.add
       .rectangle(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, ARENA_WIDTH, ARENA_HEIGHT, 0x14213d)
@@ -126,6 +144,12 @@ export class CombatScene extends Phaser.Scene {
     this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1', 'jon-snow-guard')
     this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
     this.updateFacing()
+
+    this.impactCue = this.add
+      .circle(0, 0, 13, 0xffe6a0, 0.9)
+      .setStrokeStyle(3, 0xffffff)
+      .setDepth(2)
+      .setVisible(false)
 
     this.playerOneHealthFill = this.addHealthBar(HUD_BAR_MARGIN, 'P1', 0, 0x4cc9f0)
     this.playerTwoHealthFill = this.addHealthBar(ARENA_WIDTH - HUD_BAR_MARGIN, 'P2', 1, 0xf72585)
@@ -156,7 +180,13 @@ export class CombatScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey)
     if (this.winner) {
-      if (restartPressed) this.scene.restart()
+      if (restartPressed) {
+        this.scene.restart()
+        return
+      }
+      // Gameplay stays locked, but the brief KO/cue presentation can finish.
+      this.updateJonVisual(delta, 0)
+      this.updateImpactCue(delta)
       return
     }
 
@@ -170,11 +200,28 @@ export class CombatScene extends Phaser.Scene {
     this.advanceAttack(this.playerOne, this.playerTwo, delta)
     this.advanceAttack(this.playerTwo, this.playerOne, delta)
     this.updateJonVisual(delta, this.playerOne.container.x - previousPlayerOneX)
+    this.updateImpactCue(delta)
   }
 
   private updateJonVisual(delta: number, movedX: number): void {
     const visual = this.playerOne.visual
     if (!visual) return
+
+    if (this.jonKoElapsed !== null) {
+      this.jonKoElapsed = Math.min(this.jonKoElapsed + delta, JON_KO_TOTAL_MS)
+      const frameKey = this.jonKoElapsed < JON_KO_IMPACT_MS
+        ? 'jon-hit-recoil'
+        : this.jonKoElapsed < JON_KO_COLLAPSE_MS
+          ? 'jon-ko-collapse'
+          : 'jon-ko-hold'
+      this.setJonFrame(visual, frameKey)
+      return
+    }
+
+    if (this.winner) {
+      this.setJonFrame(visual, 'jon-snow-guard')
+      return
+    }
 
     let mode: JonVisualMode
     let frameKey: string
@@ -201,13 +248,54 @@ export class CombatScene extends Phaser.Scene {
       }
     }
 
-    if (visual.texture.key !== frameKey) {
-      const soleY = JON_FRAME_SOLE_Y[frameKey]
-      if (soleY === undefined) throw new Error(`Missing Jon Snow frame baseline: ${frameKey}`)
-      visual.setTexture(frameKey)
-      visual.setOrigin(0.5, soleY / visual.height)
+    if (this.jonHitElapsed !== null) {
+      this.jonHitElapsed += delta
+      if (this.jonHitElapsed < JON_HIT_CONTACT_MS) {
+        frameKey = 'jon-hit-contact'
+      } else if (this.jonHitElapsed < JON_HIT_CONTACT_MS + JON_HIT_RECOIL_MS) {
+        frameKey = 'jon-hit-recoil'
+      } else if (this.jonHitElapsed >= JON_HIT_CONTACT_MS + JON_HIT_RECOIL_MS + JON_HIT_RETURN_MS) {
+        this.jonHitElapsed = null
+      }
+      // Return to the *current* gameplay-selected pose; attacks are never rewound.
     }
+    this.setJonFrame(visual, frameKey)
     this.jonVisualMode = mode
+  }
+
+  private setJonFrame(visual: Phaser.GameObjects.Image, frameKey: string): void {
+    if (visual.texture.key === frameKey) return
+
+    const soleY = JON_FRAME_SOLE_Y[frameKey]
+    if (soleY === undefined) throw new Error(`Missing Jon Snow frame baseline: ${frameKey}`)
+    visual.setTexture(frameKey)
+    visual.setOrigin(0.5, soleY / visual.height)
+  }
+
+  private updateImpactCue(delta: number): void {
+    if (!this.impactCue.visible) return
+
+    this.impactCueElapsed += delta
+    if (this.impactCueElapsed >= IMPACT_CUE_MS) {
+      this.impactCue.setVisible(false)
+      return
+    }
+
+    const progress = this.impactCueElapsed / IMPACT_CUE_MS
+    this.impactCue.setAlpha(1 - progress).setScale(1 + progress * 0.4)
+  }
+
+  private showImpactCue(defender: Fighter): void {
+    const front = defender.facing === 'right' ? 1 : -1
+    this.impactCueElapsed = 0
+    this.impactCue
+      .setPosition(
+        defender.container.x + front * FIGHTER_WIDTH / 4,
+        defender.container.y - FIGHTER_HEIGHT / 6,
+      )
+      .setAlpha(1)
+      .setScale(1)
+      .setVisible(true)
   }
 
   private getJonAttackFrame(fighter: Fighter): string {
@@ -330,6 +418,15 @@ export class CombatScene extends Phaser.Scene {
 
     defender.health = Math.max(0, defender.health - BASIC_ATTACK_DAMAGE)
     this.updateHealthBars()
+    this.showImpactCue(defender)
+    if (defender === this.playerOne) {
+      if (defender.health === 0) {
+        this.jonHitElapsed = null
+        this.jonKoElapsed = 0
+      } else {
+        this.jonHitElapsed = 0
+      }
+    }
     const playerLabel = defender === this.playerOne ? 'Player 1' : 'Player 2'
     console.log(`Hit! ${playerLabel} HP: ${defender.health}`)
     if (defender.health === 0) {
@@ -341,6 +438,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.winner) return
 
     this.winner = winner
+    if (winner === 'PLAYER 1') this.jonHitElapsed = null
     this.playerOne.attackArea.setVisible(false)
     this.playerTwo.attackArea.setVisible(false)
     this.add
