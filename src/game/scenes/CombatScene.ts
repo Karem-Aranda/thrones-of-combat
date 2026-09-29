@@ -66,11 +66,17 @@ const ATTACK_AREA_WIDTH = 100
 const ATTACK_AREA_HEIGHT = 70
 const PLAYER_MAX_HEALTH = 100
 const BASIC_ATTACK_DAMAGE = 10
-const HUD_BAR_WIDTH = 400
-const HUD_BAR_HEIGHT = 28
-const HUD_BAR_MARGIN = 80
-const HUD_BAR_Y = 110
-const HUD_BAR_INSET = 4
+const HUD_PANEL_WIDTH = 430
+const HUD_PANEL_HEIGHT = 100
+const HUD_PANEL_Y = 36
+const HUD_PANEL_MARGIN = 40
+const HUD_FRAME_X_OFFSET = 22
+const HUD_FRAME_Y = 82
+const HUD_FRAME_WIDTH = 386
+const HUD_FRAME_HEIGHT = 34
+const HUD_FRAME_INSET = 4
+const HUD_FILL_WIDTH = HUD_FRAME_WIDTH - HUD_FRAME_INSET * 2
+const HUD_FILL_HEIGHT = HUD_FRAME_HEIGHT - HUD_FRAME_INSET * 2
 
 type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 type Facing = 'left' | 'right'
@@ -142,7 +148,7 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(-1)
 
-    this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1', 'jon-snow-guard')
+    this.playerOne = this.addFighter(260, 0x4cc9f0, 'JON SNOW', 'jon-snow-guard')
     this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
     this.updateFacing()
 
@@ -152,8 +158,12 @@ export class CombatScene extends Phaser.Scene {
       .setDepth(2)
       .setVisible(false)
 
-    this.playerOneHealthFill = this.addHealthBar(HUD_BAR_MARGIN, 'P1', 0, 0x4cc9f0)
-    this.playerTwoHealthFill = this.addHealthBar(ARENA_WIDTH - HUD_BAR_MARGIN, 'P2', 1, 0xf72585)
+    this.playerOneHealthFill = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
+    this.playerTwoHealthFill = this.addHealthBar(
+      ARENA_WIDTH - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
+      'PLAYER 2',
+      true,
+    )
     this.updateHealthBars()
 
     const keyboard = this.input.keyboard
@@ -443,7 +453,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerOne.attackArea.setVisible(false)
     this.playerTwo.attackArea.setVisible(false)
     this.add
-      .text(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, `${this.winner} WINS`, {
+      .text(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, winner === 'PLAYER 1' ? 'JON SNOW WINS' : 'PLAYER 2 WINS', {
         fontFamily: 'Arial',
         fontSize: '56px',
         color: '#ffffff',
@@ -454,45 +464,56 @@ export class CombatScene extends Phaser.Scene {
       .setScrollFactor(0)
   }
 
-  private addHealthBar(
-    x: number,
-    label: string,
-    originX: number,
-    color: number,
-  ): Phaser.GameObjects.Rectangle {
+  private addHealthBar(panelX: number, label: string, mirrored: boolean): Phaser.GameObjects.Rectangle {
     this.add
-      .rectangle(x, HUD_BAR_Y, HUD_BAR_WIDTH, HUD_BAR_HEIGHT, 0x303443)
-      .setOrigin(originX, 0.5)
-      .setStrokeStyle(2, 0xffffff)
+      .image(panelX, HUD_PANEL_Y, 'hud-bastion-panel')
+      .setOrigin(0)
+      .setDisplaySize(HUD_PANEL_WIDTH, HUD_PANEL_HEIGHT)
+      .setFlipX(mirrored)
       .setScrollFactor(0)
 
-    const fillX = x + (originX === 0 ? HUD_BAR_INSET : -HUD_BAR_INSET)
+    const frameX = panelX + HUD_FRAME_X_OFFSET
+    this.add
+      .rectangle(frameX, HUD_FRAME_Y, HUD_FRAME_WIDTH, HUD_FRAME_HEIGHT, 0x17191b)
+      .setOrigin(0)
+      .setStrokeStyle(2, 0x717579)
+      .setScrollFactor(0)
+
+    const troughX = frameX + HUD_FRAME_INSET
+    const fillX = mirrored ? troughX + HUD_FILL_WIDTH : troughX
+    this.add
+      .rectangle(troughX, HUD_FRAME_Y + HUD_FRAME_INSET, HUD_FILL_WIDTH, HUD_FILL_HEIGHT, 0x252629)
+      .setOrigin(0)
+      .setScrollFactor(0)
+
     const fill = this.add
-      .rectangle(
-        fillX,
-        HUD_BAR_Y,
-        HUD_BAR_WIDTH - HUD_BAR_INSET * 2,
-        HUD_BAR_HEIGHT - HUD_BAR_INSET * 2,
-        color,
-      )
-      .setOrigin(originX, 0.5)
+      .rectangle(fillX, HUD_FRAME_Y + HUD_FRAME_INSET, HUD_FILL_WIDTH, HUD_FILL_HEIGHT, 0xbe9d77)
+      .setOrigin(mirrored ? 1 : 0, 0)
       .setScrollFactor(0)
 
     this.add
-      .text(x, HUD_BAR_Y - 36, label, {
-        fontFamily: 'Arial',
-        fontSize: '20px',
-        color: '#ffffff',
+      .text(mirrored ? panelX + HUD_PANEL_WIDTH - HUD_FRAME_X_OFFSET : frameX, 62, label, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '24px',
+        color: '#eee7da',
       })
-      .setOrigin(originX, 0.5)
+      .setOrigin(mirrored ? 1 : 0, 0.5)
+      .setShadow(1, 2, '#101112', 2)
       .setScrollFactor(0)
 
     return fill
   }
 
   private updateHealthBars(): void {
-    this.playerOneHealthFill.scaleX = Phaser.Math.Clamp(this.playerOne.health / PLAYER_MAX_HEALTH, 0, 1)
-    this.playerTwoHealthFill.scaleX = Phaser.Math.Clamp(this.playerTwo.health / PLAYER_MAX_HEALTH, 0, 1)
+    this.updateHealthFill(this.playerOneHealthFill, this.playerOne.health)
+    this.updateHealthFill(this.playerTwoHealthFill, this.playerTwo.health)
+  }
+
+  private updateHealthFill(fill: Phaser.GameObjects.Rectangle, health: number): void {
+    const fraction = Phaser.Math.Clamp(health / PLAYER_MAX_HEALTH, 0, 1)
+    fill.scaleX = fraction
+    fill.setVisible(fraction > 0)
+    fill.setFillStyle(health <= 20 ? 0xa36f5b : health <= 50 ? 0xad8969 : 0xbe9d77)
   }
 
   private addFighter(x: number, color: number, label: string, textureKey?: string): Fighter {
