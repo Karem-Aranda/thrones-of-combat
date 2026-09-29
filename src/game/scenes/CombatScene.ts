@@ -74,6 +74,7 @@ const ATTACK_AREA_WIDTH = 100
 const ATTACK_AREA_HEIGHT = 70
 const PLAYER_MAX_HEALTH = 100
 const BASIC_ATTACK_DAMAGE = 10
+const JON_SWING_CUE_MS = 140
 const HUD_PANEL_WIDTH = 430
 const HUD_PANEL_HEIGHT = 100
 const HUD_PANEL_Y = 36
@@ -143,6 +144,13 @@ export class CombatScene extends Phaser.Scene {
   private jonTrailElapsed = JON_TRAIL_MS
   private snowflakes: Snowflake[] = []
   private hitFlecks: HitFleck[] = []
+  private swingSound!: Phaser.Sound.BaseSound
+  private hitSounds: Phaser.Sound.BaseSound[] = []
+  private koSound!: Phaser.Sound.BaseSound
+  private ambience!: Phaser.Sound.BaseSound
+  private jonSwingPlayed = false
+  private koSoundPlayed = false
+  private ambienceStartAttempted = false
   private movementKeys!: {
     playerOne: MovementKeys
     playerTwo: MovementKeys
@@ -163,6 +171,9 @@ export class CombatScene extends Phaser.Scene {
     this.jonTrailElapsed = JON_TRAIL_MS
     this.snowflakes = []
     this.hitFlecks = []
+    this.jonSwingPlayed = false
+    this.koSoundPlayed = false
+    this.ambienceStartAttempted = false
 
     // Static arena artwork sits behind gameplay. Its measured art landmarks
     // meet the existing ground top; fighter positions and hit geometry do not move.
@@ -210,6 +221,18 @@ export class CombatScene extends Phaser.Scene {
     )
     this.updateHealthBars()
 
+    this.swingSound = this.sound.add('longclaw-swing', { volume: 0.27 })
+    this.hitSounds = [
+      this.sound.add('confirmed-hit', { volume: 0.55 }),
+      this.sound.add('confirmed-hit', { volume: 0.55 }),
+    ]
+    this.koSound = this.sound.add('ko-impact', { volume: 0.6 })
+    // Sound Manager survives scene.restart(); keep one ambience instance.
+    this.ambience = this.sound.get('northward-ambience') ??
+      this.sound.add('northward-ambience', { loop: true, volume: 0.1 })
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupTransientAudio, this)
+    this.startAmbienceIfUnlocked()
+
     const keyboard = this.input.keyboard
     if (!keyboard) {
       throw new Error('Keyboard input is unavailable')
@@ -233,6 +256,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.startAmbienceIfUnlocked()
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey)
     if (this.winner) {
       if (restartPressed) {
@@ -258,6 +282,37 @@ export class CombatScene extends Phaser.Scene {
     if (!jonWasActive && this.playerOne.attackState === 'active') this.jonTrailElapsed = 0
     this.updateJonVisual(delta, this.playerOne.container.x - previousPlayerOneX)
     this.updateVfx(delta)
+  }
+
+  private startAmbienceIfUnlocked(): void {
+    if (this.sound.locked || this.ambience.isPlaying || this.ambience.isPaused || this.ambienceStartAttempted) {
+      return
+    }
+    this.ambienceStartAttempted = true
+    this.ambience.play()
+  }
+
+  private cleanupTransientAudio(): void {
+    for (const sound of [this.swingSound, ...this.hitSounds, this.koSound]) {
+      sound.stop()
+      this.sound.remove(sound)
+    }
+  }
+
+  private playConfirmedHitAudio(health: number): void {
+    if (health === 0) {
+      if (this.koSoundPlayed) return
+      this.koSoundPlayed = true
+      if (!this.sound.locked) this.koSound.play()
+      return
+    }
+    if (this.sound.locked) return
+    for (const sound of this.hitSounds) {
+      if (!sound.isPlaying) {
+        sound.play()
+        return
+      }
+    }
   }
 
   private updateJonVisual(delta: number, movedX: number): void {
@@ -491,6 +546,7 @@ export class CombatScene extends Phaser.Scene {
       fighter.attackState = 'startup'
       fighter.attackPhaseElapsed = 0
       fighter.attackHasHit = false
+      if (fighter === this.playerOne) this.jonSwingPlayed = false
     }
   }
 
@@ -498,6 +554,14 @@ export class CombatScene extends Phaser.Scene {
     if (this.winner || fighter.attackState === 'idle') return
 
     fighter.attackPhaseElapsed += delta
+    if (fighter === this.playerOne &&
+        fighter.attackState === 'startup' &&
+        !this.jonSwingPlayed &&
+        fighter.attackPhaseElapsed >= JON_SWING_CUE_MS) {
+      this.jonSwingPlayed = true
+      // A locked cue is discarded, never queued for later playback.
+      if (!this.sound.locked && !this.swingSound.isPlaying) this.swingSound.play()
+    }
 
     // Carry excess time into the next phase when a frame spans a boundary.
     while (fighter.attackState !== 'idle') {
@@ -550,6 +614,7 @@ export class CombatScene extends Phaser.Scene {
 
     defender.health = Math.max(0, defender.health - BASIC_ATTACK_DAMAGE)
     this.updateHealthBars()
+    this.playConfirmedHitAudio(defender.health)
     this.showImpactCue(defender)
     if (defender === this.playerOne) {
       if (defender.health === 0) {
