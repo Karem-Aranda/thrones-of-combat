@@ -4,6 +4,10 @@ const ARENA_WIDTH = 1280
 const ARENA_HEIGHT = 720
 const GROUND_Y = 600
 const GROUND_HEIGHT = 80
+const GROUND_TOP = GROUND_Y - GROUND_HEIGHT / 2
+// Measured source-pixel landmarks in the 1280×720 arena layers.
+const NORTHWARD_WALL_BASE_Y = 579
+const NORTHWARD_COURTYARD_SURFACE_Y = 536
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
 // Static asset landmarks (source pixels), not gameplay dimensions.
@@ -125,21 +129,18 @@ export class CombatScene extends Phaser.Scene {
     this.jonKoElapsed = null
     this.impactCueElapsed = IMPACT_CUE_MS
 
+    // Static arena artwork sits behind gameplay. Its measured art landmarks
+    // meet the existing ground top; fighter positions and hit geometry do not move.
+    this.add.image(0, 0, 'northward-sky').setOrigin(0).setDepth(-4)
+    this.add.image(0, 0, 'northward-distance').setOrigin(0).setDepth(-3)
     this.add
-      .rectangle(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, ARENA_WIDTH, ARENA_HEIGHT, 0x14213d)
+      .image(0, GROUND_TOP - NORTHWARD_WALL_BASE_Y, 'northward-architecture')
+      .setOrigin(0)
       .setDepth(-2)
-
     this.add
-      .rectangle(ARENA_WIDTH / 2, GROUND_Y, ARENA_WIDTH, GROUND_HEIGHT, 0x3d405b)
-      .setStrokeStyle(4, 0xf2cc8f)
-
-    this.add
-      .text(ARENA_WIDTH / 2, 72, 'FIGHTING ARENA', {
-        fontFamily: 'Arial',
-        fontSize: '32px',
-        color: '#f2cc8f',
-      })
-      .setOrigin(0.5)
+      .image(0, GROUND_TOP - NORTHWARD_COURTYARD_SURFACE_Y, 'northward-courtyard')
+      .setOrigin(0)
+      .setDepth(-1)
 
     this.playerOne = this.addFighter(260, 0x4cc9f0, 'PLAYER 1', 'jon-snow-guard')
     this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
@@ -495,8 +496,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private addFighter(x: number, color: number, label: string, textureKey?: string): Fighter {
-    const groundTop = GROUND_Y - GROUND_HEIGHT / 2
-    const fighterY = groundTop - FIGHTER_HEIGHT / 2
+    const fighterY = GROUND_TOP - FIGHTER_HEIGHT / 2
 
     // Match the illustrated head-to-foot height to the existing fighter height.
     // Only the image flips: container position and collision geometry stay unchanged.
