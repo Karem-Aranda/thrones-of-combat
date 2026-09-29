@@ -8,6 +8,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   height: 720,
   parent: 'game-container',
   backgroundColor: '#111111',
+  input: { activePointers: 6 },
   scene: [BootScene, CombatScene],
   scale: {
     mode: Phaser.Scale.FIT,

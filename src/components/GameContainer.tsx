@@ -16,5 +16,12 @@ export default function GameContainer() {
     }
   }, [])
 
-  return <div id="game-container" />
+  return (
+    <>
+      <div id="game-container" />
+      <div className="rotate-hint" role="status">
+        <div className="rotate-hint__frame">Rotate your device to landscape to fight.</div>
+      </div>
+    </>
+  )
 }

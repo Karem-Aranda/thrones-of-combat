@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { TouchControls, type PlayerId } from '../controls/TouchControls'
 
 const ARENA_WIDTH = 1280
 const ARENA_HEIGHT = 720
@@ -10,11 +11,11 @@ const NORTHWARD_WALL_BASE_Y = 579
 const NORTHWARD_COURTYARD_SURFACE_Y = 536
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
-// Static asset landmarks (source pixels), not gameplay dimensions.
+// Landmarks remain in the original source coordinates after the 1/3-size resample.
 const JON_SNOW_TEXTURE_HEIGHT = 1374
 const JON_SNOW_HEAD_Y = 128
 const JON_SNOW_FOOT_Y = 1329
-const JON_IMAGE_SCALE = FIGHTER_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y)
+const JON_IMAGE_SCALE = 3 * FIGHTER_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y)
 const JON_IDLE_FRAMES = [
   'jon-snow-guard', 'jon-idle-2', 'jon-idle-3', 'jon-idle-2',
   'jon-snow-guard', 'jon-idle-4', 'jon-snow-guard',
@@ -109,6 +110,19 @@ interface MovementKeys {
   right: Phaser.Input.Keyboard.Key
 }
 
+interface FighterInput {
+  leftHeld: boolean
+  rightHeld: boolean
+  attackPressed: boolean
+}
+
+interface HealthBarDisplay {
+  frame: Phaser.GameObjects.Rectangle
+  trough: Phaser.GameObjects.Rectangle
+  fill: Phaser.GameObjects.Rectangle
+  label: Phaser.GameObjects.Text
+}
+
 interface Snowflake {
   shape: Phaser.GameObjects.Arc
   speedX: number
@@ -131,8 +145,10 @@ export class CombatScene extends Phaser.Scene {
     playerTwo: Phaser.Input.Keyboard.Key
   }
   private restartKey!: Phaser.Input.Keyboard.Key
-  private playerOneHealthFill!: Phaser.GameObjects.Rectangle
-  private playerTwoHealthFill!: Phaser.GameObjects.Rectangle
+  private playerOneHealthBar!: HealthBarDisplay
+  private playerTwoHealthBar!: HealthBarDisplay
+  private shortLandscapeHud = false
+  private touchControls!: TouchControls
   private winner: Winner | null = null
   private jonVisualMode: JonVisualMode = 'idle'
   private jonVisualElapsed = 0
@@ -213,12 +229,14 @@ export class CombatScene extends Phaser.Scene {
       })
     }
 
-    this.playerOneHealthFill = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
-    this.playerTwoHealthFill = this.addHealthBar(
+    this.playerOneHealthBar = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
+    this.playerTwoHealthBar = this.addHealthBar(
       ARENA_WIDTH - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
       'PLAYER 2',
       true,
     )
+    this.shortLandscapeHud = false
+    this.updateResponsiveHud()
     this.updateHealthBars()
 
     this.swingSound = this.sound.add('longclaw-swing', { volume: 0.27 })
@@ -253,11 +271,21 @@ export class CombatScene extends Phaser.Scene {
       playerTwo: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
     }
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
+    this.touchControls = new TouchControls(this)
   }
 
   update(_time: number, delta: number): void {
     this.startAmbienceIfUnlocked()
-    const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey)
+    this.updateResponsiveHud()
+    const touchCapable = window.matchMedia('(any-pointer: coarse)').matches
+    const portrait = touchCapable && window.matchMedia('(orientation: portrait)').matches
+    this.touchControls.setPresentation(touchCapable, portrait, this.winner !== null)
+    const keyboardRestart = Phaser.Input.Keyboard.JustDown(this.restartKey)
+    const touchRestart = this.touchControls.consumeRestart()
+    const restartPressed = keyboardRestart || touchRestart
+    const playerOneInput = this.readFighterInput('playerOne', this.movementKeys.playerOne, this.attackKeys.playerOne)
+    const playerTwoInput = this.readFighterInput('playerTwo', this.movementKeys.playerTwo, this.attackKeys.playerTwo)
+    if (portrait) return
     if (this.winner) {
       if (restartPressed) {
         this.scene.restart()
@@ -270,18 +298,30 @@ export class CombatScene extends Phaser.Scene {
     }
 
     const previousPlayerOneX = this.playerOne.container.x
-    this.moveFighter(this.playerOne, this.movementKeys.playerOne, delta)
-    this.moveFighter(this.playerTwo, this.movementKeys.playerTwo, delta)
+    this.moveFighter(this.playerOne, playerOneInput, delta)
+    this.moveFighter(this.playerTwo, playerTwoInput, delta)
     this.updateFacing()
 
     const jonWasActive = this.playerOne.attackState === 'active'
-    this.tryStartAttack(this.playerOne, this.attackKeys.playerOne)
-    this.tryStartAttack(this.playerTwo, this.attackKeys.playerTwo)
+    this.tryStartAttack(this.playerOne, playerOneInput.attackPressed)
+    this.tryStartAttack(this.playerTwo, playerTwoInput.attackPressed)
     this.advanceAttack(this.playerOne, this.playerTwo, delta)
     this.advanceAttack(this.playerTwo, this.playerOne, delta)
     if (!jonWasActive && this.playerOne.attackState === 'active') this.jonTrailElapsed = 0
     this.updateJonVisual(delta, this.playerOne.container.x - previousPlayerOneX)
     this.updateVfx(delta)
+  }
+
+  private readFighterInput(
+    player: PlayerId, keys: MovementKeys, attackKey: Phaser.Input.Keyboard.Key,
+  ): FighterInput {
+    const keyboardAttack = Phaser.Input.Keyboard.JustDown(attackKey)
+    const touchAttack = this.touchControls.consumeAttack(player)
+    return {
+      leftHeld: keys.left.isDown || this.touchControls.isHeld(player, 'left'),
+      rightHeld: keys.right.isDown || this.touchControls.isHeld(player, 'right'),
+      attackPressed: keyboardAttack || touchAttack,
+    }
   }
 
   private startAmbienceIfUnlocked(): void {
@@ -381,7 +421,9 @@ export class CombatScene extends Phaser.Scene {
     const soleY = JON_FRAME_SOLE_Y[frameKey]
     if (soleY === undefined) throw new Error(`Missing Jon Snow frame baseline: ${frameKey}`)
     visual.setTexture(frameKey)
-    visual.setOrigin(0.5, soleY / visual.height)
+    // The original move-3 source was one pixel shorter than the other frames.
+    const sourceHeight = frameKey === 'jon-move-3' ? 1373 : JON_SNOW_TEXTURE_HEIGHT
+    visual.setOrigin(0.5, soleY / sourceHeight)
   }
 
   private addSnowfall(): void {
@@ -496,14 +538,14 @@ export class CombatScene extends Phaser.Scene {
     return elapsed < 100 ? 'jon-attack-r-1' : elapsed < 200 ? 'jon-attack-r-2' : 'jon-attack-r-3'
   }
 
-  private moveFighter(fighter: Fighter, keys: MovementKeys, delta: number): void {
+  private moveFighter(fighter: Fighter, input: FighterInput, delta: number): void {
     let direction = 0
 
-    if (keys.left.isDown) {
+    if (input.leftHeld) {
       direction -= 1
     }
 
-    if (keys.right.isDown) {
+    if (input.rightHeld) {
       direction += 1
     }
 
@@ -540,9 +582,9 @@ export class CombatScene extends Phaser.Scene {
     fighter.attackArea.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2)
   }
 
-  private tryStartAttack(fighter: Fighter, key: Phaser.Input.Keyboard.Key): void {
-    // Consume each key press even during an attack, so inputs are not queued.
-    if (Phaser.Input.Keyboard.JustDown(key) && fighter.attackState === 'idle') {
+  private tryStartAttack(fighter: Fighter, attackPressed: boolean): void {
+    // Consume each press even during an attack, so inputs are not queued.
+    if (attackPressed && fighter.attackState === 'idle') {
       fighter.attackState = 'startup'
       fighter.attackPhaseElapsed = 0
       fighter.attackHasHit = false
@@ -635,6 +677,11 @@ export class CombatScene extends Phaser.Scene {
     if (this.winner) return
 
     this.winner = winner
+    this.touchControls.setPresentation(
+      window.matchMedia('(any-pointer: coarse)').matches,
+      false,
+      true,
+    )
     if (winner === 'PLAYER 1') this.jonHitElapsed = null
     this.playerOne.attackArea.setVisible(false)
     this.playerTwo.attackArea.setVisible(false)
@@ -650,7 +697,7 @@ export class CombatScene extends Phaser.Scene {
       .setScrollFactor(0)
   }
 
-  private addHealthBar(panelX: number, label: string, mirrored: boolean): Phaser.GameObjects.Rectangle {
+  private addHealthBar(panelX: number, label: string, mirrored: boolean): HealthBarDisplay {
     this.add
       .image(panelX, HUD_PANEL_Y, 'hud-bastion-panel')
       .setOrigin(0)
@@ -659,7 +706,7 @@ export class CombatScene extends Phaser.Scene {
       .setScrollFactor(0)
 
     const frameX = panelX + HUD_FRAME_X_OFFSET
-    this.add
+    const frame = this.add
       .rectangle(frameX, HUD_FRAME_Y, HUD_FRAME_WIDTH, HUD_FRAME_HEIGHT, 0x17191b)
       .setOrigin(0)
       .setStrokeStyle(2, 0x717579)
@@ -667,7 +714,7 @@ export class CombatScene extends Phaser.Scene {
 
     const troughX = frameX + HUD_FRAME_INSET
     const fillX = mirrored ? troughX + HUD_FILL_WIDTH : troughX
-    this.add
+    const trough = this.add
       .rectangle(troughX, HUD_FRAME_Y + HUD_FRAME_INSET, HUD_FILL_WIDTH, HUD_FILL_HEIGHT, 0x252629)
       .setOrigin(0)
       .setScrollFactor(0)
@@ -677,7 +724,7 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(mirrored ? 1 : 0, 0)
       .setScrollFactor(0)
 
-    this.add
+    const name = this.add
       .text(mirrored ? panelX + HUD_PANEL_WIDTH - HUD_FRAME_X_OFFSET : frameX, 62, label, {
         fontFamily: 'Georgia, serif',
         fontSize: '24px',
@@ -687,12 +734,25 @@ export class CombatScene extends Phaser.Scene {
       .setShadow(1, 2, '#101112', 2)
       .setScrollFactor(0)
 
-    return fill
+    return { frame, trough, fill, label: name }
+  }
+
+  private updateResponsiveHud(): void {
+    const shortLandscape = window.innerWidth > window.innerHeight && window.innerHeight <= 450
+    if (shortLandscape === this.shortLandscapeHud) return
+    this.shortLandscapeHud = shortLandscape
+    for (const bar of [this.playerOneHealthBar, this.playerTwoHealthBar]) {
+      bar.label.setFontSize(shortLandscape ? 32 : 24)
+      bar.frame.setSize(HUD_FRAME_WIDTH, shortLandscape ? 38 : HUD_FRAME_HEIGHT)
+      bar.trough.setSize(HUD_FILL_WIDTH, shortLandscape ? 30 : HUD_FILL_HEIGHT)
+      bar.fill.setSize(HUD_FILL_WIDTH, shortLandscape ? 30 : HUD_FILL_HEIGHT)
+    }
+    this.updateHealthBars()
   }
 
   private updateHealthBars(): void {
-    this.updateHealthFill(this.playerOneHealthFill, this.playerOne.health)
-    this.updateHealthFill(this.playerTwoHealthFill, this.playerTwo.health)
+    this.updateHealthFill(this.playerOneHealthBar.fill, this.playerOne.health)
+    this.updateHealthFill(this.playerTwoHealthBar.fill, this.playerTwo.health)
   }
 
   private updateHealthFill(fill: Phaser.GameObjects.Rectangle, health: number): void {
