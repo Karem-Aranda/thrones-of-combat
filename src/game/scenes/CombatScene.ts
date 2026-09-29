@@ -32,6 +32,14 @@ const JON_KO_IMPACT_MS = 70
 const JON_KO_COLLAPSE_MS = 330
 const JON_KO_TOTAL_MS = 400
 const IMPACT_CUE_MS = 80
+const IMPACT_CUE_OPACITY = 0.75
+const JON_TRAIL_MS = 90
+const JON_TRAIL_OPACITY = 0.4
+const HIT_FLECK_MS = 140
+const HIT_FLECK_OPACITY = 0.6
+const BACKGROUND_SNOW_COUNT = 12
+const NEAR_SNOW_COUNT = 6
+const HIT_FLECK_POOL_SIZE = 6
 // Measured source-pixel sole lines. Each texture uses the same scale and world baseline.
 const JON_FRAME_SOLE_Y: Record<string, number> = {
   'jon-snow-guard': 1329,
@@ -100,6 +108,20 @@ interface MovementKeys {
   right: Phaser.Input.Keyboard.Key
 }
 
+interface Snowflake {
+  shape: Phaser.GameObjects.Arc
+  speedX: number
+  speedY: number
+  respawns: number
+}
+
+interface HitFleck {
+  shape: Phaser.GameObjects.Arc
+  speedX: number
+  speedY: number
+  elapsed: number
+}
+
 export class CombatScene extends Phaser.Scene {
   private playerOne!: Fighter
   private playerTwo!: Fighter
@@ -115,8 +137,12 @@ export class CombatScene extends Phaser.Scene {
   private jonVisualElapsed = 0
   private jonHitElapsed: number | null = null
   private jonKoElapsed: number | null = null
-  private impactCue!: Phaser.GameObjects.Arc
+  private impactCue!: Phaser.GameObjects.Graphics
   private impactCueElapsed = IMPACT_CUE_MS
+  private jonTrail!: Phaser.GameObjects.Graphics
+  private jonTrailElapsed = JON_TRAIL_MS
+  private snowflakes: Snowflake[] = []
+  private hitFlecks: HitFleck[] = []
   private movementKeys!: {
     playerOne: MovementKeys
     playerTwo: MovementKeys
@@ -134,6 +160,9 @@ export class CombatScene extends Phaser.Scene {
     this.jonHitElapsed = null
     this.jonKoElapsed = null
     this.impactCueElapsed = IMPACT_CUE_MS
+    this.jonTrailElapsed = JON_TRAIL_MS
+    this.snowflakes = []
+    this.hitFlecks = []
 
     // Static arena artwork sits behind gameplay. Its measured art landmarks
     // meet the existing ground top; fighter positions and hit geometry do not move.
@@ -147,16 +176,31 @@ export class CombatScene extends Phaser.Scene {
       .image(0, GROUND_TOP - NORTHWARD_COURTYARD_SURFACE_Y, 'northward-courtyard')
       .setOrigin(0)
       .setDepth(-1)
+    this.addSnowfall()
 
     this.playerOne = this.addFighter(260, 0x4cc9f0, 'jon-snow-guard')
     this.playerTwo = this.addFighter(1020, 0xf72585)
     this.updateFacing()
 
-    this.impactCue = this.add
-      .circle(0, 0, 13, 0xffe6a0, 0.9)
-      .setStrokeStyle(3, 0xffffff)
-      .setDepth(2)
-      .setVisible(false)
+    this.jonTrail = this.add.graphics().setDepth(1).setVisible(false)
+    this.jonTrail.fillStyle(0xcbd3d6)
+    this.jonTrail.fillTriangle(-32, 6, 18, -5, 9, 3)
+    this.jonTrail.fillTriangle(23, -3, 32, -5, 20, 1)
+
+    this.impactCue = this.add.graphics().setDepth(2).setVisible(false)
+    this.impactCue.fillStyle(0xcbd3d6)
+    this.impactCue.fillTriangle(-18, 10, 18, -10, 9, 0)
+    this.impactCue.lineStyle(2, 0xdde4e7)
+    this.impactCue.lineBetween(-18, 10, 18, -10)
+
+    for (let i = 0; i < HIT_FLECK_POOL_SIZE; i += 1) {
+      this.hitFlecks.push({
+        shape: this.add.circle(0, 0, 2, 0xcbd3d6, HIT_FLECK_OPACITY).setDepth(2).setVisible(false),
+        speedX: 0,
+        speedY: 0,
+        elapsed: HIT_FLECK_MS,
+      })
+    }
 
     this.playerOneHealthFill = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
     this.playerTwoHealthFill = this.addHealthBar(
@@ -197,7 +241,7 @@ export class CombatScene extends Phaser.Scene {
       }
       // Gameplay stays locked, but the brief KO/cue presentation can finish.
       this.updateJonVisual(delta, 0)
-      this.updateImpactCue(delta)
+      this.updateVfx(delta)
       return
     }
 
@@ -206,12 +250,14 @@ export class CombatScene extends Phaser.Scene {
     this.moveFighter(this.playerTwo, this.movementKeys.playerTwo, delta)
     this.updateFacing()
 
+    const jonWasActive = this.playerOne.attackState === 'active'
     this.tryStartAttack(this.playerOne, this.attackKeys.playerOne)
     this.tryStartAttack(this.playerTwo, this.attackKeys.playerTwo)
     this.advanceAttack(this.playerOne, this.playerTwo, delta)
     this.advanceAttack(this.playerTwo, this.playerOne, delta)
+    if (!jonWasActive && this.playerOne.attackState === 'active') this.jonTrailElapsed = 0
     this.updateJonVisual(delta, this.playerOne.container.x - previousPlayerOneX)
-    this.updateImpactCue(delta)
+    this.updateVfx(delta)
   }
 
   private updateJonVisual(delta: number, movedX: number): void {
@@ -283,30 +329,105 @@ export class CombatScene extends Phaser.Scene {
     visual.setOrigin(0.5, soleY / visual.height)
   }
 
+  private addSnowfall(): void {
+    for (let i = 0; i < BACKGROUND_SNOW_COUNT + NEAR_SNOW_COUNT; i += 1) {
+      const near = i >= BACKGROUND_SNOW_COUNT
+      const radius = near ? 1 + (i % 3) * 0.25 : 0.5 + (i % 3) * 0.25
+      const opacity = near ? 0.12 + (i % 3) * 0.05 : 0.18 + (i % 3) * 0.06
+      const shape = this.add
+        .circle((i * 337 + 149) % ARENA_WIDTH, (i * 251 + 71) % ARENA_HEIGHT, radius, 0xe4e9eb, opacity)
+        .setDepth(near ? -0.5 : -2.5)
+        .setScrollFactor(0)
+      this.snowflakes.push({
+        shape,
+        speedX: near ? -8 : -5,
+        speedY: near ? 26 + (i % 3) * 4 : 12 + (i % 4) * 6,
+        respawns: 0,
+      })
+    }
+  }
+
+  private updateVfx(delta: number): void {
+    const seconds = delta / 1000
+    for (let i = 0; i < this.snowflakes.length; i += 1) {
+      const flake = this.snowflakes[i]
+      flake.shape.x += flake.speedX * seconds
+      flake.shape.y += flake.speedY * seconds
+      if (flake.shape.y > ARENA_HEIGHT + flake.shape.radius) {
+        flake.respawns += 1
+        flake.shape.x = (i * 337 + flake.respawns * 191 + 149) % ARENA_WIDTH
+        flake.shape.y = -flake.shape.radius
+      } else if (flake.shape.x < -flake.shape.radius) {
+        flake.shape.x = ARENA_WIDTH + flake.shape.radius
+      }
+    }
+
+    this.updateJonTrail(delta)
+    this.updateImpactCue(delta)
+    for (let i = 0; i < this.hitFlecks.length; i += 1) {
+      const fleck = this.hitFlecks[i]
+      if (!fleck.shape.visible) continue
+      fleck.elapsed += delta
+      if (fleck.elapsed >= HIT_FLECK_MS) {
+        fleck.shape.setVisible(false)
+        continue
+      }
+      fleck.shape.x += fleck.speedX * seconds
+      fleck.shape.y += fleck.speedY * seconds
+      fleck.shape.setAlpha(HIT_FLECK_OPACITY * (1 - fleck.elapsed / HIT_FLECK_MS))
+    }
+  }
+
+  private updateJonTrail(delta: number): void {
+    if (this.jonTrailElapsed >= JON_TRAIL_MS) {
+      this.jonTrail.setVisible(false)
+      return
+    }
+
+    const direction = this.playerOne.facing === 'right' ? 1 : -1
+    this.jonTrail
+      .setPosition(this.playerOne.container.x + direction * 45, this.playerOne.container.y - 35)
+      .setScale(direction, 1)
+      .setAlpha(JON_TRAIL_OPACITY * (1 - this.jonTrailElapsed / JON_TRAIL_MS))
+      .setVisible(true)
+    this.jonTrailElapsed += delta
+  }
+
   private updateImpactCue(delta: number): void {
     if (!this.impactCue.visible) return
 
-    this.impactCueElapsed += delta
     if (this.impactCueElapsed >= IMPACT_CUE_MS) {
       this.impactCue.setVisible(false)
       return
     }
 
     const progress = this.impactCueElapsed / IMPACT_CUE_MS
-    this.impactCue.setAlpha(1 - progress).setScale(1 + progress * 0.4)
+    this.impactCue.setAlpha(IMPACT_CUE_OPACITY * (1 - progress))
+    this.impactCueElapsed += delta
   }
 
   private showImpactCue(defender: Fighter): void {
     const front = defender.facing === 'right' ? 1 : -1
+    const x = defender.container.x + front * FIGHTER_WIDTH / 4
+    const y = defender.container.y - FIGHTER_HEIGHT / 6
     this.impactCueElapsed = 0
     this.impactCue
-      .setPosition(
-        defender.container.x + front * FIGHTER_WIDTH / 4,
-        defender.container.y - FIGHTER_HEIGHT / 6,
-      )
-      .setAlpha(1)
-      .setScale(1)
+      .setPosition(x, y)
+      .setAlpha(IMPACT_CUE_OPACITY)
+      .setScale(front, 1)
       .setVisible(true)
+
+    let spawned = 0
+    for (const fleck of this.hitFlecks) {
+      if (fleck.shape.visible) continue
+      const spread = spawned - 1
+      fleck.shape.setPosition(x + spread * 4, y + spread * 2).setAlpha(HIT_FLECK_OPACITY).setVisible(true)
+      fleck.speedX = -front * (24 + spawned * 6) + spread * 5
+      fleck.speedY = -22 - spawned * 8
+      fleck.elapsed = 0
+      spawned += 1
+      if (spawned === 3) break
+    }
   }
 
   private getJonAttackFrame(fighter: Fighter): string {
