@@ -148,8 +148,8 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(-1)
 
-    this.playerOne = this.addFighter(260, 0x4cc9f0, 'JON SNOW', 'jon-snow-guard')
-    this.playerTwo = this.addFighter(1020, 0xf72585, 'PLAYER 2')
+    this.playerOne = this.addFighter(260, 0x4cc9f0, 'jon-snow-guard')
+    this.playerTwo = this.addFighter(1020, 0xf72585)
     this.updateFacing()
 
     this.impactCue = this.add
@@ -516,7 +516,7 @@ export class CombatScene extends Phaser.Scene {
     fill.setFillStyle(health <= 20 ? 0xa36f5b : health <= 50 ? 0xad8969 : 0xbe9d77)
   }
 
-  private addFighter(x: number, color: number, label: string, textureKey?: string): Fighter {
+  private addFighter(x: number, color: number, textureKey?: string): Fighter {
     const fighterY = GROUND_TOP - FIGHTER_HEIGHT / 2
 
     // Match the illustrated head-to-foot height to the existing fighter height.
@@ -531,14 +531,6 @@ export class CombatScene extends Phaser.Scene {
       this.add
         .rectangle(0, 0, FIGHTER_WIDTH, FIGHTER_HEIGHT, color)
         .setStrokeStyle(4, 0xffffff)
-
-    const name = this.add
-      .text(0, -FIGHTER_HEIGHT / 2 - 24, label, {
-        fontFamily: 'Arial',
-        fontSize: '18px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5)
 
     // Temporary marker makes the fighter's gameplay-facing state visible.
     const facingMarker = this.add
@@ -565,7 +557,7 @@ export class CombatScene extends Phaser.Scene {
       .setVisible(false)
 
     return {
-      container: this.add.container(x, fighterY, [body, name, facingMarker, attackArea]),
+      container: this.add.container(x, fighterY, [body, facingMarker, attackArea]),
       visual,
       attackArea,
       facingMarker,
