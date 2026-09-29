@@ -3,6 +3,7 @@ import northwardSkyUrl from '../../assets/arena/northward-sky.png'
 import northwardDistanceUrl from '../../assets/arena/northward-distance.png'
 import northwardArchitectureUrl from '../../assets/arena/northward-architecture.png'
 import northwardCourtyardUrl from '../../assets/arena/northward-courtyard.png'
+import hudBastionPanelUrl from '../../assets/hud/hud-bastion-panel.png'
 import jonSnowGuardUrl from '../../assets/fighters/jon-snow-guard.png'
 
 const jonSnowAnimationUrls = import.meta.glob<string>(
@@ -20,6 +21,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('northward-distance', northwardDistanceUrl)
     this.load.image('northward-architecture', northwardArchitectureUrl)
     this.load.image('northward-courtyard', northwardCourtyardUrl)
+    this.load.image('hud-bastion-panel', hudBastionPanelUrl)
     this.load.image('jon-snow-guard', jonSnowGuardUrl)
     for (const [path, url] of Object.entries(jonSnowAnimationUrls)) {
       const frameName = path.split('/').pop()?.replace(/\.png$/, '')
