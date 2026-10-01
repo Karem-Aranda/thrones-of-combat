@@ -1,8 +1,8 @@
 import Phaser from 'phaser'
-import northwardSkyUrl from '../../assets/arena/northward-sky.png'
-import northwardDistanceUrl from '../../assets/arena/northward-distance.png'
-import northwardArchitectureUrl from '../../assets/arena/northward-architecture.png'
-import northwardCourtyardUrl from '../../assets/arena/northward-courtyard.png'
+import northwardSkyUrl from '../../assets/arena/northward-sky-wide.png'
+import northwardDistanceUrl from '../../assets/arena/northward-distance-wide.png'
+import northwardArchitectureUrl from '../../assets/arena/northward-architecture-wide.png'
+import northwardCourtyardUrl from '../../assets/arena/northward-courtyard-wide.png'
 import hudBastionPanelUrl from '../../assets/hud/hud-bastion-panel.png'
 import jonSnowGuardUrl from '../../assets/fighters/jon-snow-guard.png'
 import longclawSwingUrl from '../../assets/audio/longclaw-swing.wav'
@@ -21,10 +21,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('northward-sky', northwardSkyUrl)
-    this.load.image('northward-distance', northwardDistanceUrl)
-    this.load.image('northward-architecture', northwardArchitectureUrl)
-    this.load.image('northward-courtyard', northwardCourtyardUrl)
+    this.load.image('northward-sky-wide', northwardSkyUrl)
+    this.load.image('northward-distance-wide', northwardDistanceUrl)
+    this.load.image('northward-architecture-wide', northwardArchitectureUrl)
+    this.load.image('northward-courtyard-wide', northwardCourtyardUrl)
     this.load.image('hud-bastion-panel', hudBastionPanelUrl)
     this.load.image('jon-snow-guard', jonSnowGuardUrl)
     this.load.audio('longclaw-swing', longclawSwingUrl)
