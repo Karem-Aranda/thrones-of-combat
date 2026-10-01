@@ -1,14 +1,16 @@
 import Phaser from 'phaser'
 import { TouchControls, type PlayerId } from '../controls/TouchControls'
+import {
+  VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT,
+  moveFightersWithinWorld, getCombatCameraTarget, getCombatCameraScroll,
+} from '../world/combatWorld'
 
-const ARENA_WIDTH = 1280
-const ARENA_HEIGHT = 720
 const GROUND_Y = 600
 const GROUND_HEIGHT = 80
 const GROUND_TOP = GROUND_Y - GROUND_HEIGHT / 2
-// Measured source-pixel landmarks in the 1280×720 arena layers.
-const NORTHWARD_WALL_BASE_Y = 579
-const NORTHWARD_COURTYARD_SURFACE_Y = 536
+// The approved cropped courtyard has a 20-pixel transparent strip above the paving.
+const NORTHWARD_COURTYARD_TOP_INSET = 20
+const NORTHWARD_DISTANCE_Y = 170
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
 // Landmarks remain in the original source coordinates after the 1/3-size resample.
@@ -191,23 +193,17 @@ export class CombatScene extends Phaser.Scene {
     this.koSoundPlayed = false
     this.ambienceStartAttempted = false
 
-    // Static arena artwork sits behind gameplay. Its measured art landmarks
-    // meet the existing ground top; fighter positions and hit geometry do not move.
-    this.add.image(0, 0, 'northward-sky').setOrigin(0).setDepth(-4)
-    this.add.image(0, 0, 'northward-distance').setOrigin(0).setDepth(-3)
-    this.add
-      .image(0, GROUND_TOP - NORTHWARD_WALL_BASE_Y, 'northward-architecture')
-      .setOrigin(0)
-      .setDepth(-2)
-    this.add
-      .image(0, GROUND_TOP - NORTHWARD_COURTYARD_SURFACE_Y, 'northward-courtyard')
-      .setOrigin(0)
-      .setDepth(-1)
+    this.addArena()
     this.addSnowfall()
 
-    this.playerOne = this.addFighter(260, 0x4cc9f0, 'jon-snow-guard')
-    this.playerTwo = this.addFighter(1020, 0xf72585)
+    const spawnOffset = (WORLD_WIDTH - VIEWPORT_WIDTH) / 2
+    this.playerOne = this.addFighter(spawnOffset + 260, 0x4cc9f0, 'jon-snow-guard')
+    this.playerTwo = this.addFighter(spawnOffset + 1020, 0xf72585)
     this.updateFacing()
+    this.cameras.main
+      .setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
+      .setZoom(1)
+      .setScroll(getCombatCameraTarget(this.playerOne.container.x, this.playerTwo.container.x), 0)
 
     this.jonTrail = this.add.graphics().setDepth(1).setVisible(false)
     this.jonTrail.fillStyle(0xcbd3d6)
@@ -231,7 +227,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.playerOneHealthBar = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
     this.playerTwoHealthBar = this.addHealthBar(
-      ARENA_WIDTH - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
+      VIEWPORT_WIDTH - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
       'PLAYER 2',
       true,
     )
@@ -298,8 +294,10 @@ export class CombatScene extends Phaser.Scene {
     }
 
     const previousPlayerOneX = this.playerOne.container.x
-    this.moveFighter(this.playerOne, playerOneInput, delta)
-    this.moveFighter(this.playerTwo, playerTwoInput, delta)
+    this.moveFighters(playerOneInput, playerTwoInput, delta)
+    this.cameras.main.setScroll(getCombatCameraScroll(
+      this.cameras.main.scrollX, this.playerOne.container.x, this.playerTwo.container.x, delta,
+    ), 0)
     this.updateFacing()
 
     const jonWasActive = this.playerOne.attackState === 'active'
@@ -426,13 +424,29 @@ export class CombatScene extends Phaser.Scene {
     visual.setOrigin(0.5, soleY / sourceHeight)
   }
 
+  private addArena(): void {
+    const centerOffset = (WORLD_WIDTH - VIEWPORT_WIDTH) / 2
+    const distanceScrollFactor = 0.25
+    // Native-size sky/distance cover the full 0…1120 camera range without tiling.
+    // Center the parallax layer at the initial midpoint camera position.
+    this.add.image(VIEWPORT_WIDTH / 2, 0, 'northward-sky-wide')
+      .setOrigin(0.5, 0).setDepth(-4).setScrollFactor(0)
+    this.add.image(VIEWPORT_WIDTH / 2 + centerOffset * distanceScrollFactor,
+      NORTHWARD_DISTANCE_Y, 'northward-distance-wide')
+      .setOrigin(0.5, 0).setDepth(-3).setScrollFactor(distanceScrollFactor, 1)
+    this.add.image(0, GROUND_TOP, 'northward-architecture-wide')
+      .setOrigin(0, 1).setDepth(-2)
+    this.add.image(0, GROUND_TOP - NORTHWARD_COURTYARD_TOP_INSET, 'northward-courtyard-wide')
+      .setOrigin(0).setDepth(-1)
+  }
+
   private addSnowfall(): void {
     for (let i = 0; i < BACKGROUND_SNOW_COUNT + NEAR_SNOW_COUNT; i += 1) {
       const near = i >= BACKGROUND_SNOW_COUNT
       const radius = near ? 1 + (i % 3) * 0.25 : 0.5 + (i % 3) * 0.25
       const opacity = near ? 0.12 + (i % 3) * 0.05 : 0.18 + (i % 3) * 0.06
       const shape = this.add
-        .circle((i * 337 + 149) % ARENA_WIDTH, (i * 251 + 71) % ARENA_HEIGHT, radius, 0xe4e9eb, opacity)
+        .circle((i * 337 + 149) % VIEWPORT_WIDTH, (i * 251 + 71) % VIEWPORT_HEIGHT, radius, 0xe4e9eb, opacity)
         .setDepth(near ? -0.5 : -2.5)
         .setScrollFactor(0)
       this.snowflakes.push({
@@ -450,12 +464,12 @@ export class CombatScene extends Phaser.Scene {
       const flake = this.snowflakes[i]
       flake.shape.x += flake.speedX * seconds
       flake.shape.y += flake.speedY * seconds
-      if (flake.shape.y > ARENA_HEIGHT + flake.shape.radius) {
+      if (flake.shape.y > VIEWPORT_HEIGHT + flake.shape.radius) {
         flake.respawns += 1
-        flake.shape.x = (i * 337 + flake.respawns * 191 + 149) % ARENA_WIDTH
+        flake.shape.x = (i * 337 + flake.respawns * 191 + 149) % VIEWPORT_WIDTH
         flake.shape.y = -flake.shape.radius
       } else if (flake.shape.x < -flake.shape.radius) {
-        flake.shape.x = ARENA_WIDTH + flake.shape.radius
+        flake.shape.x = VIEWPORT_WIDTH + flake.shape.radius
       }
     }
 
@@ -538,27 +552,15 @@ export class CombatScene extends Phaser.Scene {
     return elapsed < 100 ? 'jon-attack-r-1' : elapsed < 200 ? 'jon-attack-r-2' : 'jon-attack-r-3'
   }
 
-  private moveFighter(fighter: Fighter, input: FighterInput, delta: number): void {
-    let direction = 0
-
-    if (input.leftHeld) {
-      direction -= 1
-    }
-
-    if (input.rightHeld) {
-      direction += 1
-    }
-
-    if (direction !== 0) {
-      const halfFighterWidth = FIGHTER_WIDTH / 2
-      const distance = direction * PLAYER_MOVE_SPEED * (delta / 1000)
-
-      fighter.container.x = Phaser.Math.Clamp(
-        fighter.container.x + distance,
-        halfFighterWidth,
-        ARENA_WIDTH - halfFighterWidth,
-      )
-    }
+  private moveFighters(playerOneInput: FighterInput, playerTwoInput: FighterInput, delta: number): void {
+    const distance = (input: FighterInput): number =>
+      (Number(input.rightHeld) - Number(input.leftHeld)) * PLAYER_MOVE_SPEED * delta / 1000
+    const [playerOneX, playerTwoX] = moveFightersWithinWorld(
+      this.playerOne.container.x, this.playerTwo.container.x,
+      distance(playerOneInput), distance(playerTwoInput), FIGHTER_WIDTH / 2,
+    )
+    this.playerOne.container.x = playerOneX
+    this.playerTwo.container.x = playerTwoX
   }
 
   private updateFacing(): void {
@@ -686,7 +688,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerOne.attackArea.setVisible(false)
     this.playerTwo.attackArea.setVisible(false)
     this.add
-      .text(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, winner === 'PLAYER 1' ? 'JON SNOW WINS' : 'PLAYER 2 WINS', {
+      .text(VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT / 2, winner === 'PLAYER 1' ? 'JON SNOW WINS' : 'PLAYER 2 WINS', {
         fontFamily: 'Arial',
         fontSize: '56px',
         color: '#ffffff',
