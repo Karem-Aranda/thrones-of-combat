@@ -1,6 +1,10 @@
 import Phaser from 'phaser'
 import { TouchControls, type PlayerId, type ScreenInsets } from '../controls/TouchControls'
 import {
+  ATTACK_DEFINITIONS, createAttackRuntime, selectAttack, getAttackPresentationElapsed,
+  type AttackId, type AttackRuntime,
+} from '../combat/attackDefinitions'
+import {
   VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT,
   getFighterWorldSpawns, getAdaptiveViewportWidth, moveFightersWithinWorld,
   getCombatCameraTarget, getCombatCameraScroll,
@@ -69,14 +73,7 @@ const JON_FRAME_SOLE_Y: Record<string, number> = {
 }
 const FACING_MARKER_SIZE = 12
 const PLAYER_MOVE_SPEED = 300
-const ATTACK_STARTUP_MS = 180
-const ATTACK_ACTIVE_MS = 220
-const ATTACK_RECOVERY_MS = 300
-const ATTACK_AREA_WIDTH = 100
-const ATTACK_AREA_HEIGHT = 70
 const PLAYER_MAX_HEALTH = 100
-const BASIC_ATTACK_DAMAGE = 10
-const JON_SWING_CUE_MS = 140
 const HUD_PANEL_WIDTH = 430
 const HUD_PANEL_HEIGHT = 100
 const HUD_PANEL_Y = 36
@@ -89,12 +86,11 @@ const HUD_FRAME_INSET = 4
 const HUD_FILL_WIDTH = HUD_FRAME_WIDTH - HUD_FRAME_INSET * 2
 const HUD_FILL_HEIGHT = HUD_FRAME_HEIGHT - HUD_FRAME_INSET * 2
 
-type AttackState = 'idle' | 'startup' | 'active' | 'recovery'
 type Facing = 'left' | 'right'
 type Winner = 'PLAYER 1' | 'PLAYER 2'
 type JonVisualMode = 'idle' | 'move-forward' | 'move-retreat' | 'attack'
 
-interface Fighter {
+interface Fighter extends AttackRuntime {
   container: Phaser.GameObjects.Container
   vertical: VerticalMovement
   visual?: Phaser.GameObjects.Image
@@ -102,9 +98,6 @@ interface Fighter {
   facingMarker: Phaser.GameObjects.Rectangle
   facing: Facing
   health: number
-  attackState: AttackState
-  attackPhaseElapsed: number
-  attackHasHit: boolean
 }
 
 interface MovementKeys {
@@ -117,7 +110,8 @@ interface FighterInput {
   leftHeld: boolean
   rightHeld: boolean
   jumpPressed: boolean
-  attackPressed: boolean
+  lightPressed: boolean
+  heavyPressed: boolean
 }
 
 interface HealthBarDisplay {
@@ -147,8 +141,8 @@ export class CombatScene extends Phaser.Scene {
   private playerOne!: Fighter
   private playerTwo!: Fighter
   private attackKeys!: {
-    playerOne: Phaser.Input.Keyboard.Key
-    playerTwo: Phaser.Input.Keyboard.Key
+    playerOne: Record<AttackId, Phaser.Input.Keyboard.Key>
+    playerTwo: Record<AttackId, Phaser.Input.Keyboard.Key>
   }
   private restartKey!: Phaser.Input.Keyboard.Key
   private playerOneHealthBar!: HealthBarDisplay
@@ -185,6 +179,9 @@ export class CombatScene extends Phaser.Scene {
     playerTwo: MovementKeys
   }
   private pendingKeyboardJump: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
+  private pendingKeyboardAttacks: Record<PlayerId, Record<AttackId, boolean>> = {
+    playerOne: { light: false, heavy: false }, playerTwo: { light: false, heavy: false },
+  }
 
   constructor() {
     super('CombatScene')
@@ -281,15 +278,26 @@ export class CombatScene extends Phaser.Scene {
         jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
       },
     }
-    this.clearKeyboardJumps()
-    for (const keys of Object.values(this.movementKeys)) keys.jump.on('down', this.recordJumpPress)
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupJumpInput, this)
-    window.addEventListener('blur', this.clearKeyboardJumps)
-    document.addEventListener('visibilitychange', this.clearKeyboardJumps)
     this.attackKeys = {
-      playerOne: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
-      playerTwo: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
+      playerOne: {
+        light: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
+        heavy: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
+      },
+      playerTwo: {
+        light: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
+        heavy: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SEMICOLON),
+      },
     }
+    this.clearKeyboardPresses()
+    for (const keys of Object.values(this.movementKeys)) keys.jump.on('down', this.recordJumpPress)
+    for (const keys of Object.values(this.attackKeys)) {
+      for (const key of Object.values(keys)) key.on('down', this.recordAttackPress)
+    }
+    // Punctuation keyCode varies by browser/layout; keep the requested character binding.
+    keyboard.on('keydown', this.recordSemicolonPress)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupKeyboardInput, this)
+    window.addEventListener('blur', this.clearKeyboardPresses)
+    document.addEventListener('visibilitychange', this.clearKeyboardPresses)
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
     this.touchControls = new TouchControls(this)
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this)
@@ -318,8 +326,8 @@ export class CombatScene extends Phaser.Scene {
     const keyboardRestart = Phaser.Input.Keyboard.JustDown(this.restartKey)
     const touchRestart = this.touchControls.consumeRestart()
     const restartPressed = keyboardRestart || touchRestart
-    const playerOneInput = this.readFighterInput('playerOne', this.movementKeys.playerOne, this.attackKeys.playerOne)
-    const playerTwoInput = this.readFighterInput('playerTwo', this.movementKeys.playerTwo, this.attackKeys.playerTwo)
+    const playerOneInput = this.readFighterInput('playerOne', this.movementKeys.playerOne)
+    const playerTwoInput = this.readFighterInput('playerTwo', this.movementKeys.playerTwo)
     if (portrait) return
     if (this.winner) {
       if (restartPressed) {
@@ -334,6 +342,11 @@ export class CombatScene extends Phaser.Scene {
     }
 
     const previousPlayerOneX = this.playerOne.container.x
+    // An airborne press is discarded even if this same update resolves landing.
+    const playerOneAttack = this.playerOne.vertical.movementState === 'grounded'
+      ? selectAttack(playerOneInput.lightPressed, playerOneInput.heavyPressed) : null
+    const playerTwoAttack = this.playerTwo.vertical.movementState === 'grounded'
+      ? selectAttack(playerTwoInput.lightPressed, playerTwoInput.heavyPressed) : null
     this.moveFighters(playerOneInput, playerTwoInput, delta)
     this.cameras.main.setScroll(getCombatCameraScroll(
       this.cameras.main.scrollX, this.playerOne.container.x, this.playerTwo.container.x,
@@ -342,8 +355,8 @@ export class CombatScene extends Phaser.Scene {
     this.updateFacing()
 
     const jonWasActive = this.playerOne.attackState === 'active'
-    this.tryStartAttack(this.playerOne, playerOneInput.attackPressed)
-    this.tryStartAttack(this.playerTwo, playerTwoInput.attackPressed)
+    this.tryStartAttack(this.playerOne, playerOneAttack)
+    this.tryStartAttack(this.playerTwo, playerTwoAttack)
     this.advanceAttack(this.playerOne, this.playerTwo, delta)
     this.advanceAttack(this.playerTwo, this.playerOne, delta)
     if (!jonWasActive && this.playerOne.attackState === 'active') this.jonTrailElapsed = 0
@@ -352,10 +365,15 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private readFighterInput(
-    player: PlayerId, keys: MovementKeys, attackKey: Phaser.Input.Keyboard.Key,
+    player: PlayerId, keys: MovementKeys,
   ): FighterInput {
-    const keyboardAttack = Phaser.Input.Keyboard.JustDown(attackKey)
-    const touchAttack = this.touchControls.consumeAttack(player)
+    const keyboardLight = this.pendingKeyboardAttacks[player].light
+    const keyboardHeavy = this.pendingKeyboardAttacks[player].heavy
+    this.pendingKeyboardAttacks[player].light = false
+    this.pendingKeyboardAttacks[player].heavy = false
+    // Read both before combining; short-circuiting must not leave a pending touch edge.
+    const touchLight = this.touchControls.consumeAttack(player, 'light')
+    const touchHeavy = this.touchControls.consumeAttack(player, 'heavy')
     const keyboardJump = this.pendingKeyboardJump[player]
     this.pendingKeyboardJump[player] = false
     const touchJump = this.touchControls.consumeJump(player)
@@ -363,7 +381,8 @@ export class CombatScene extends Phaser.Scene {
       leftHeld: keys.left.isDown || this.touchControls.isHeld(player, 'left'),
       rightHeld: keys.right.isDown || this.touchControls.isHeld(player, 'right'),
       jumpPressed: keyboardJump || touchJump,
-      attackPressed: keyboardAttack || touchAttack,
+      lightPressed: keyboardLight || touchLight,
+      heavyPressed: keyboardHeavy || touchHeavy,
     }
   }
 
@@ -373,16 +392,39 @@ export class CombatScene extends Phaser.Scene {
     this.pendingKeyboardJump[player] = true
   }
 
-  private clearKeyboardJumps = (): void => {
-    this.pendingKeyboardJump.playerOne = false
-    this.pendingKeyboardJump.playerTwo = false
+  private recordAttackPress = (key: Phaser.Input.Keyboard.Key, event: KeyboardEvent): void => {
+    if (event.repeat) return
+    for (const player of ['playerOne', 'playerTwo'] as const) {
+      for (const attack of ['light', 'heavy'] as const) {
+        if (key === this.attackKeys[player][attack]) this.pendingKeyboardAttacks[player][attack] = true
+      }
+    }
   }
 
-  private cleanupJumpInput(): void {
+  private recordSemicolonPress = (event: KeyboardEvent): void => {
+    if (event.key === ';' && !event.repeat && !event.isComposing) {
+      this.pendingKeyboardAttacks.playerTwo.heavy = true
+    }
+  }
+
+  private clearKeyboardPresses = (): void => {
+    this.pendingKeyboardJump.playerOne = false
+    this.pendingKeyboardJump.playerTwo = false
+    for (const pending of Object.values(this.pendingKeyboardAttacks)) {
+      pending.light = false
+      pending.heavy = false
+    }
+  }
+
+  private cleanupKeyboardInput(): void {
     for (const keys of Object.values(this.movementKeys)) keys.jump.off('down', this.recordJumpPress)
-    window.removeEventListener('blur', this.clearKeyboardJumps)
-    document.removeEventListener('visibilitychange', this.clearKeyboardJumps)
-    this.clearKeyboardJumps()
+    for (const keys of Object.values(this.attackKeys)) {
+      for (const key of Object.values(keys)) key.off('down', this.recordAttackPress)
+    }
+    this.input.keyboard?.off('keydown', this.recordSemicolonPress)
+    window.removeEventListener('blur', this.clearKeyboardPresses)
+    document.removeEventListener('visibilitychange', this.clearKeyboardPresses)
+    this.clearKeyboardPresses()
   }
 
   private startAmbienceIfUnlocked(): void {
@@ -611,7 +653,10 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private getJonAttackFrame(fighter: Fighter): string {
-    const elapsed = fighter.attackPhaseElapsed
+    if (!fighter.currentAttack || fighter.attackState === 'idle') return 'jon-snow-guard'
+    const elapsed = getAttackPresentationElapsed(
+      ATTACK_DEFINITIONS[fighter.currentAttack], fighter.attackState, fighter.attackPhaseElapsed,
+    )
     if (fighter.attackState === 'startup') {
       return elapsed < 90 ? 'jon-attack-s-1' : 'jon-attack-s-2'
     }
@@ -664,27 +709,38 @@ export class CombatScene extends Phaser.Scene {
     fighter.facing = facing
     fighter.visual?.setFlipX(facing === 'left')
     fighter.facingMarker.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 - FACING_MARKER_SIZE)
-    fighter.attackArea.x = (facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2)
+    this.positionAttackArea(fighter)
   }
 
-  private tryStartAttack(fighter: Fighter, attackPressed: boolean): void {
+  private positionAttackArea(fighter: Fighter): void {
+    const definition = ATTACK_DEFINITIONS[fighter.currentAttack ?? 'light']
+    if (fighter.attackArea.width !== definition.reach || fighter.attackArea.height !== definition.height) {
+      fighter.attackArea.setSize(definition.reach, definition.height)
+    }
+    fighter.attackArea.x = (fighter.facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 + definition.reach / 2)
+  }
+
+  private tryStartAttack(fighter: Fighter, attack: AttackId | null): void {
     // Consume each press even during an attack, so inputs are not queued.
-    if (attackPressed && fighter.attackState === 'idle' && fighter.vertical.movementState === 'grounded') {
+    if (!this.winner && attack && fighter.attackState === 'idle' && fighter.vertical.movementState === 'grounded') {
+      fighter.currentAttack = attack
       fighter.attackState = 'startup'
       fighter.attackPhaseElapsed = 0
       fighter.attackHasHit = false
+      this.positionAttackArea(fighter)
       if (fighter === this.playerOne) this.jonSwingPlayed = false
     }
   }
 
   private advanceAttack(fighter: Fighter, defender: Fighter, delta: number): void {
-    if (this.winner || fighter.attackState === 'idle') return
+    if (this.winner || fighter.attackState === 'idle' || !fighter.currentAttack) return
+    const definition = ATTACK_DEFINITIONS[fighter.currentAttack]
 
     fighter.attackPhaseElapsed += delta
     if (fighter === this.playerOne &&
         fighter.attackState === 'startup' &&
         !this.jonSwingPlayed &&
-        fighter.attackPhaseElapsed >= JON_SWING_CUE_MS) {
+        fighter.attackPhaseElapsed >= definition.swingCueMs) {
       this.jonSwingPlayed = true
       // A locked cue is discarded, never queued for later playback.
       if (!this.sound.locked && !this.swingSound.isPlaying) this.swingSound.play()
@@ -693,35 +749,38 @@ export class CombatScene extends Phaser.Scene {
     // Carry excess time into the next phase when a frame spans a boundary.
     while (fighter.attackState !== 'idle') {
       if (fighter.attackState === 'startup') {
-        if (fighter.attackPhaseElapsed < ATTACK_STARTUP_MS) return
-        fighter.attackPhaseElapsed -= ATTACK_STARTUP_MS
+        if (fighter.attackPhaseElapsed < definition.startupMs) return
+        fighter.attackPhaseElapsed -= definition.startupMs
         fighter.attackState = 'active'
         fighter.attackArea.setVisible(true)
       } else if (fighter.attackState === 'active') {
         const hit = this.checkAttackHit(fighter, defender)
-        if (hit) this.applyDamage(defender)
+        if (hit) this.applyDamage(defender, definition.damage)
         if (this.winner) return
-        if (fighter.attackPhaseElapsed < ATTACK_ACTIVE_MS) return
-        fighter.attackPhaseElapsed -= ATTACK_ACTIVE_MS
+        if (fighter.attackPhaseElapsed < definition.activeMs) return
+        fighter.attackPhaseElapsed -= definition.activeMs
         fighter.attackState = 'recovery'
         fighter.attackArea.setVisible(false)
       } else {
-        if (fighter.attackPhaseElapsed < ATTACK_RECOVERY_MS) return
+        if (fighter.attackPhaseElapsed < definition.recoveryMs) return
         fighter.attackPhaseElapsed = 0
         fighter.attackState = 'idle'
+        fighter.currentAttack = null
+        this.positionAttackArea(fighter)
       }
     }
   }
 
   private checkAttackHit(attacker: Fighter, defender: Fighter): boolean {
-    if (this.winner || attacker.attackState !== 'active' || attacker.attackHasHit) return false
+    if (this.winner || attacker.attackState !== 'active' || attacker.attackHasHit || !attacker.currentAttack) return false
+    const definition = ATTACK_DEFINITIONS[attacker.currentAttack]
 
     // Use the facing-positioned visualization for identical world-space geometry.
     const attackBox = new Phaser.Geom.Rectangle(
-      attacker.container.x + attacker.attackArea.x - ATTACK_AREA_WIDTH / 2,
-      attacker.container.y + attacker.attackArea.y - ATTACK_AREA_HEIGHT / 2,
-      ATTACK_AREA_WIDTH,
-      ATTACK_AREA_HEIGHT,
+      attacker.container.x + attacker.attackArea.x - definition.reach / 2,
+      attacker.container.y + attacker.attackArea.y - definition.height / 2,
+      definition.reach,
+      definition.height,
     )
     const hurtBox = new Phaser.Geom.Rectangle(
       defender.container.x - FIGHTER_WIDTH / 2,
@@ -736,10 +795,10 @@ export class CombatScene extends Phaser.Scene {
     return true
   }
 
-  private applyDamage(defender: Fighter): void {
+  private applyDamage(defender: Fighter, damage: number): void {
     if (this.winner) return
 
-    defender.health = Math.max(0, defender.health - BASIC_ATTACK_DAMAGE)
+    defender.health = Math.max(0, defender.health - damage)
     this.updateHealthBars()
     this.playConfirmedHitAudio(defender.health)
     this.showImpactCue(defender)
@@ -955,10 +1014,10 @@ export class CombatScene extends Phaser.Scene {
     // setFacing positions this temporary area on the fighter's facing side.
     const attackArea = this.add
       .rectangle(
-        FIGHTER_WIDTH / 2 + ATTACK_AREA_WIDTH / 2,
+        FIGHTER_WIDTH / 2 + ATTACK_DEFINITIONS.light.reach / 2,
         0,
-        ATTACK_AREA_WIDTH,
-        ATTACK_AREA_HEIGHT,
+        ATTACK_DEFINITIONS.light.reach,
+        ATTACK_DEFINITIONS.light.height,
         0xffd166,
         0.65,
       )
@@ -973,9 +1032,7 @@ export class CombatScene extends Phaser.Scene {
       facingMarker,
       facing: 'right',
       health: PLAYER_MAX_HEALTH,
-      attackState: 'idle',
-      attackPhaseElapsed: 0,
-      attackHasHit: false,
+      ...createAttackRuntime(),
     }
   }
 }
