@@ -1,12 +1,27 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  VIEWPORT_WIDTH, WORLD_WIDTH, MAX_FIGHTER_SEPARATION,
+  VIEWPORT_WIDTH, WORLD_WIDTH, MAX_FIGHTER_SEPARATION, getFighterWorldSpawns, getAdaptiveViewportWidth,
   moveFightersWithinWorld, getCombatCameraTarget, getCombatCameraScroll,
 } from '../src/game/world/combatWorld.ts'
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`)
 const halfWidth = 36
+
+test('initial and restarted world spawns are independent of adaptive viewport width', () => {
+  const initialSpawns = getFighterWorldSpawns()
+  assert.deepEqual(initialSpawns, [820, 1580])
+  for (const viewportWidth of [1280, 1558, 1600]) {
+    // Scene create() calls this same viewport-independent helper on every restart.
+    const restartedSpawns = getFighterWorldSpawns()
+    assert.deepEqual(restartedSpawns, initialSpawns, `restart at width ${viewportWidth}`)
+    assert.equal(
+      getCombatCameraTarget(...restartedSpawns, viewportWidth),
+      (initialSpawns[0] + initialSpawns[1] - viewportWidth) / 2,
+      'only the camera framing should depend on the viewport width',
+    )
+  }
+})
 
 test('world limits account for the entire fighter width', () => {
   assert.deepEqual(moveFightersWithinWorld(100, 500, -1000, -1000, halfWidth), [36, 36])
@@ -65,6 +80,19 @@ test('camera initializes at the combat midpoint and respects both world edges', 
   assert.equal(getCombatCameraTarget(820, 1580), 560)
   assert.equal(getCombatCameraTarget(36, 500), 0)
   assert.equal(getCombatCameraTarget(1900, 2364), WORLD_WIDTH - VIEWPORT_WIDTH)
+  assert.equal(getAdaptiveViewportWidth(1280, 720), 1280)
+  assert.equal(getAdaptiveViewportWidth(844, 390), 1558)
+  // Desktop padding and dynamic browser chrome change the usable parent ratio.
+  assert.equal(getAdaptiveViewportWidth(1232, 672), 1320)
+  assert.equal(getAdaptiveViewportWidth(796, 342), 1600)
+  assert.equal(getAdaptiveViewportWidth(844, 360), 1600)
+  assert.equal(getAdaptiveViewportWidth(844, 0), 1280)
+  assert.equal(getAdaptiveViewportWidth(2560, 1080), 1600)
+  assert.equal(getAdaptiveViewportWidth(480, 320), 1280)
+  assert.equal(getAdaptiveViewportWidth(390, 844), 1280)
+  assert.equal(getCombatCameraTarget(1900, 2364, 1600), 800)
+  assert.equal(getCombatCameraScroll(400, 36, 1116, 16, 1600), 0)
+  assert.equal(getCombatCameraScroll(400, 1284, 2364, 16, 1600), 800)
 })
 
 test('camera smoothing has the same static-target response at different frame rates', () => {

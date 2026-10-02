@@ -1,6 +1,13 @@
 import Phaser from 'phaser'
+import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from '../world/combatWorld'
 
 export type PlayerId = 'playerOne' | 'playerTwo'
+export interface ScreenInsets {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
 type Action = 'left' | 'right' | 'attack' | 'restart'
 
 interface TouchButton {
@@ -13,6 +20,8 @@ interface TouchButton {
   active: boolean
   width: number
   height: number
+  baseX: number
+  baseY: number
 }
 
 const COMBAT_BUTTONS: Array<{ player: PlayerId; action: Action; x: number; width: number }> = [
@@ -30,6 +39,9 @@ export class TouchControls {
   private readonly pendingAttack: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
   private pendingRestart = false
   private presentation = ''
+  private viewportWidth = VIEWPORT_WIDTH
+  private viewportHeight = VIEWPORT_HEIGHT
+  private safeInsets: ScreenInsets = { top: 0, right: 0, bottom: 0, left: 0 }
 
   constructor(private readonly scene: Phaser.Scene) {
     this.buttons = COMBAT_BUTTONS.map(({ player, action, x, width }) =>
@@ -52,6 +64,13 @@ export class TouchControls {
     this.presentation = next
     for (const button of this.buttons) this.setActive(button, next === 'combat')
     this.setActive(this.restartButton, next === 'restart')
+  }
+
+  setViewport(width: number, height: number, safeInsets: ScreenInsets): void {
+    this.viewportWidth = width
+    this.viewportHeight = height
+    this.safeInsets = safeInsets
+    for (const button of [...this.buttons, this.restartButton]) this.positionButton(button)
   }
 
   isHeld(player: PlayerId, action: 'left' | 'right'): boolean {
@@ -114,7 +133,9 @@ export class TouchControls {
       : undefined
     const button: TouchButton = {
       player, action, graphic, zone, caption, pointers: new Set(), active: false, width, height,
+      baseX: x, baseY: y,
     }
+    this.positionButton(button)
     this.drawButton(button)
     zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!button.active || button.pointers.has(pointer.id)) return
@@ -127,6 +148,22 @@ export class TouchControls {
       if (button.pointers.delete(pointer.id)) this.drawButton(button)
     })
     return button
+  }
+
+  private positionButton(button: TouchButton): void {
+    // Shift each cluster as a unit, retaining its spacing and original margins.
+    const sideMargin = COMBAT_BUTTONS[0].x - COMBAT_BUTTONS[0].width / 2
+    const bottomMargin = VIEWPORT_HEIGHT - 630 - 112 / 2
+    const x = button.action === 'restart'
+      ? (this.viewportWidth + this.safeInsets.left - this.safeInsets.right) / 2
+      : button.player === 'playerTwo'
+        ? this.viewportWidth - (VIEWPORT_WIDTH - button.baseX) - Math.max(0, this.safeInsets.right - sideMargin)
+        : button.baseX + Math.max(0, this.safeInsets.left - sideMargin)
+    const y = this.viewportHeight - (VIEWPORT_HEIGHT - button.baseY) -
+      Math.max(0, this.safeInsets.bottom - bottomMargin)
+    button.graphic.setPosition(x, y)
+    button.zone.setPosition(x, y)
+    button.caption?.setPosition(x, y)
   }
 
   private drawButton(button: TouchButton): void {
