@@ -1,8 +1,9 @@
 import Phaser from 'phaser'
-import { TouchControls, type PlayerId } from '../controls/TouchControls'
+import { TouchControls, type PlayerId, type ScreenInsets } from '../controls/TouchControls'
 import {
   VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT,
-  moveFightersWithinWorld, getCombatCameraTarget, getCombatCameraScroll,
+  getFighterWorldSpawns, getAdaptiveViewportWidth, moveFightersWithinWorld,
+  getCombatCameraTarget, getCombatCameraScroll,
 } from '../world/combatWorld'
 
 const GROUND_Y = 600
@@ -119,10 +120,12 @@ interface FighterInput {
 }
 
 interface HealthBarDisplay {
+  panel: Phaser.GameObjects.Image
   frame: Phaser.GameObjects.Rectangle
   trough: Phaser.GameObjects.Rectangle
   fill: Phaser.GameObjects.Rectangle
   label: Phaser.GameObjects.Text
+  mirrored: boolean
 }
 
 interface Snowflake {
@@ -149,7 +152,14 @@ export class CombatScene extends Phaser.Scene {
   private restartKey!: Phaser.Input.Keyboard.Key
   private playerOneHealthBar!: HealthBarDisplay
   private playerTwoHealthBar!: HealthBarDisplay
+  private winnerText?: Phaser.GameObjects.Text
   private shortLandscapeHud = false
+  private skyLayer!: Phaser.GameObjects.Image
+  private distanceLayer!: Phaser.GameObjects.Image
+  private viewportWidth = VIEWPORT_WIDTH
+  private viewportHeight = VIEWPORT_HEIGHT
+  private safeInsets: ScreenInsets = { top: 0, right: 0, bottom: 0, left: 0 }
+  private parentResizeObserver?: ResizeObserver
   private touchControls!: TouchControls
   private winner: Winner | null = null
   private jonVisualMode: JonVisualMode = 'idle'
@@ -192,18 +202,23 @@ export class CombatScene extends Phaser.Scene {
     this.jonSwingPlayed = false
     this.koSoundPlayed = false
     this.ambienceStartAttempted = false
+    this.winnerText = undefined
+    this.viewportWidth = this.scale.width
+    this.viewportHeight = this.scale.height
 
     this.addArena()
     this.addSnowfall()
 
-    const spawnOffset = (WORLD_WIDTH - VIEWPORT_WIDTH) / 2
-    this.playerOne = this.addFighter(spawnOffset + 260, 0x4cc9f0, 'jon-snow-guard')
-    this.playerTwo = this.addFighter(spawnOffset + 1020, 0xf72585)
+    const [playerOneSpawnX, playerTwoSpawnX] = getFighterWorldSpawns()
+    this.playerOne = this.addFighter(playerOneSpawnX, 0x4cc9f0, 'jon-snow-guard')
+    this.playerTwo = this.addFighter(playerTwoSpawnX, 0xf72585)
     this.updateFacing()
     this.cameras.main
       .setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
       .setZoom(1)
-      .setScroll(getCombatCameraTarget(this.playerOne.container.x, this.playerTwo.container.x), 0)
+      .setScroll(getCombatCameraTarget(
+        this.playerOne.container.x, this.playerTwo.container.x, this.scale.width,
+      ), 0)
 
     this.jonTrail = this.add.graphics().setDepth(1).setVisible(false)
     this.jonTrail.fillStyle(0xcbd3d6)
@@ -227,7 +242,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.playerOneHealthBar = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
     this.playerTwoHealthBar = this.addHealthBar(
-      VIEWPORT_WIDTH - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
+      this.scale.width - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
       'PLAYER 2',
       true,
     )
@@ -268,6 +283,21 @@ export class CombatScene extends Phaser.Scene {
     }
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
     this.touchControls = new TouchControls(this)
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupResponsiveLayout, this)
+    // Dynamic browser chrome can resize the CSS parent without a window resize.
+    const parent = this.game.canvas.parentElement
+    if (parent) {
+      this.parentResizeObserver = new ResizeObserver(() => {
+        const bounds = parent.getBoundingClientRect()
+        if (bounds.width > 0 && bounds.height > 0 &&
+            (bounds.width !== this.scale.parentSize.width || bounds.height !== this.scale.parentSize.height)) {
+          this.scale.setParentSize(bounds.width, bounds.height)
+        }
+      })
+      this.parentResizeObserver.observe(parent)
+    }
+    this.handleScaleResize()
   }
 
   update(_time: number, delta: number): void {
@@ -296,7 +326,8 @@ export class CombatScene extends Phaser.Scene {
     const previousPlayerOneX = this.playerOne.container.x
     this.moveFighters(playerOneInput, playerTwoInput, delta)
     this.cameras.main.setScroll(getCombatCameraScroll(
-      this.cameras.main.scrollX, this.playerOne.container.x, this.playerTwo.container.x, delta,
+      this.cameras.main.scrollX, this.playerOne.container.x, this.playerTwo.container.x,
+      delta, this.scale.width,
     ), 0)
     this.updateFacing()
 
@@ -425,13 +456,14 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private addArena(): void {
-    const centerOffset = (WORLD_WIDTH - VIEWPORT_WIDTH) / 2
+    const viewportWidth = this.scale.width
+    const centerOffset = (WORLD_WIDTH - viewportWidth) / 2
     const distanceScrollFactor = 0.25
-    // Native-size sky/distance cover the full 0…1120 camera range without tiling.
+    // Native-size sky/distance cover the adaptive camera range without tiling.
     // Center the parallax layer at the initial midpoint camera position.
-    this.add.image(VIEWPORT_WIDTH / 2, 0, 'northward-sky-wide')
+    this.skyLayer = this.add.image(viewportWidth / 2, 0, 'northward-sky-wide')
       .setOrigin(0.5, 0).setDepth(-4).setScrollFactor(0)
-    this.add.image(VIEWPORT_WIDTH / 2 + centerOffset * distanceScrollFactor,
+    this.distanceLayer = this.add.image(viewportWidth / 2 + centerOffset * distanceScrollFactor,
       NORTHWARD_DISTANCE_Y, 'northward-distance-wide')
       .setOrigin(0.5, 0).setDepth(-3).setScrollFactor(distanceScrollFactor, 1)
     this.add.image(0, GROUND_TOP, 'northward-architecture-wide')
@@ -446,7 +478,7 @@ export class CombatScene extends Phaser.Scene {
       const radius = near ? 1 + (i % 3) * 0.25 : 0.5 + (i % 3) * 0.25
       const opacity = near ? 0.12 + (i % 3) * 0.05 : 0.18 + (i % 3) * 0.06
       const shape = this.add
-        .circle((i * 337 + 149) % VIEWPORT_WIDTH, (i * 251 + 71) % VIEWPORT_HEIGHT, radius, 0xe4e9eb, opacity)
+        .circle((i * 337 + 149) % this.scale.width, (i * 251 + 71) % this.scale.height, radius, 0xe4e9eb, opacity)
         .setDepth(near ? -0.5 : -2.5)
         .setScrollFactor(0)
       this.snowflakes.push({
@@ -464,12 +496,12 @@ export class CombatScene extends Phaser.Scene {
       const flake = this.snowflakes[i]
       flake.shape.x += flake.speedX * seconds
       flake.shape.y += flake.speedY * seconds
-      if (flake.shape.y > VIEWPORT_HEIGHT + flake.shape.radius) {
+      if (flake.shape.y > this.viewportHeight + flake.shape.radius) {
         flake.respawns += 1
-        flake.shape.x = (i * 337 + flake.respawns * 191 + 149) % VIEWPORT_WIDTH
+        flake.shape.x = (i * 337 + flake.respawns * 191 + 149) % this.scale.width
         flake.shape.y = -flake.shape.radius
       } else if (flake.shape.x < -flake.shape.radius) {
-        flake.shape.x = VIEWPORT_WIDTH + flake.shape.radius
+        flake.shape.x = this.scale.width + flake.shape.radius
       }
     }
 
@@ -687,7 +719,7 @@ export class CombatScene extends Phaser.Scene {
     if (winner === 'PLAYER 1') this.jonHitElapsed = null
     this.playerOne.attackArea.setVisible(false)
     this.playerTwo.attackArea.setVisible(false)
-    this.add
+    this.winnerText = this.add
       .text(VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT / 2, winner === 'PLAYER 1' ? 'JON SNOW WINS' : 'PLAYER 2 WINS', {
         fontFamily: 'Arial',
         fontSize: '56px',
@@ -697,10 +729,11 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
+    this.positionWinnerText()
   }
 
   private addHealthBar(panelX: number, label: string, mirrored: boolean): HealthBarDisplay {
-    this.add
+    const panel = this.add
       .image(panelX, HUD_PANEL_Y, 'hud-bastion-panel')
       .setOrigin(0)
       .setDisplaySize(HUD_PANEL_WIDTH, HUD_PANEL_HEIGHT)
@@ -736,20 +769,96 @@ export class CombatScene extends Phaser.Scene {
       .setShadow(1, 2, '#101112', 2)
       .setScrollFactor(0)
 
-    return { frame, trough, fill, label: name }
+    return { panel, frame, trough, fill, label: name, mirrored }
   }
 
   private updateResponsiveHud(): void {
     const shortLandscape = window.innerWidth > window.innerHeight && window.innerHeight <= 450
-    if (shortLandscape === this.shortLandscapeHud) return
-    this.shortLandscapeHud = shortLandscape
-    for (const bar of [this.playerOneHealthBar, this.playerTwoHealthBar]) {
-      bar.label.setFontSize(shortLandscape ? 32 : 24)
-      bar.frame.setSize(HUD_FRAME_WIDTH, shortLandscape ? 38 : HUD_FRAME_HEIGHT)
-      bar.trough.setSize(HUD_FILL_WIDTH, shortLandscape ? 30 : HUD_FILL_HEIGHT)
-      bar.fill.setSize(HUD_FILL_WIDTH, shortLandscape ? 30 : HUD_FILL_HEIGHT)
+    if (shortLandscape !== this.shortLandscapeHud) {
+      this.shortLandscapeHud = shortLandscape
+      for (const bar of [this.playerOneHealthBar, this.playerTwoHealthBar]) {
+        bar.label.setFontSize(shortLandscape ? 32 : 24)
+        bar.frame.setSize(HUD_FRAME_WIDTH, shortLandscape ? 38 : HUD_FRAME_HEIGHT)
+        bar.trough.setSize(HUD_FILL_WIDTH, shortLandscape ? 30 : HUD_FILL_HEIGHT)
+        bar.fill.setSize(HUD_FILL_WIDTH, shortLandscape ? 30 : HUD_FILL_HEIGHT)
+      }
+      this.updateHealthBars()
     }
-    this.updateHealthBars()
+  }
+
+  private handleScaleResize(): void {
+    // FIT scales into the actual parent, not the potentially larger window.
+    const desiredWidth = getAdaptiveViewportWidth(this.scale.parentSize.width, this.scale.parentSize.height)
+    if (this.scale.width !== desiredWidth || this.scale.height !== VIEWPORT_HEIGHT) {
+      this.scale.setGameSize(desiredWidth, VIEWPORT_HEIGHT)
+      return // setGameSize emits RESIZE; apply layout with the refreshed FIT bounds.
+    }
+
+    const width = this.scale.width
+    const height = this.scale.height
+    const previousWidth = this.viewportWidth
+    if (previousWidth !== width) {
+      for (const flake of this.snowflakes) flake.shape.x *= width / previousWidth
+    }
+    this.viewportWidth = width
+    this.viewportHeight = height
+    this.safeInsets = this.readSafeInsets()
+
+    this.skyLayer.setX(width / 2)
+    this.distanceLayer.setX(width / 2 + ((WORLD_WIDTH - width) / 2) * 0.25)
+    this.playerOneHealthBar && this.positionHealthBar(
+      this.playerOneHealthBar, Math.max(HUD_PANEL_MARGIN, this.safeInsets.left),
+    )
+    this.playerTwoHealthBar && this.positionHealthBar(
+      this.playerTwoHealthBar, width - Math.max(HUD_PANEL_MARGIN, this.safeInsets.right) - HUD_PANEL_WIDTH,
+    )
+    this.positionWinnerText()
+    this.touchControls?.setViewport(width, height, this.safeInsets)
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
+    this.cameras.main.setScroll(
+      getCombatCameraTarget(this.playerOne.container.x, this.playerTwo.container.x, width), 0,
+    )
+  }
+
+  private positionHealthBar(bar: HealthBarDisplay, panelX: number): void {
+    const panelY = Math.max(HUD_PANEL_Y, this.safeInsets.top)
+    const offsetY = panelY - HUD_PANEL_Y
+    bar.panel.setPosition(panelX, panelY)
+    const frameX = panelX + HUD_FRAME_X_OFFSET
+    const troughX = frameX + HUD_FRAME_INSET
+    bar.frame.setPosition(frameX, HUD_FRAME_Y + offsetY)
+    bar.trough.setPosition(troughX, HUD_FRAME_Y + HUD_FRAME_INSET + offsetY)
+    bar.fill.setPosition(bar.mirrored ? troughX + HUD_FILL_WIDTH : troughX, HUD_FRAME_Y + HUD_FRAME_INSET + offsetY)
+    bar.label.setPosition(bar.mirrored ? panelX + HUD_PANEL_WIDTH - HUD_FRAME_X_OFFSET : frameX, 62 + offsetY)
+  }
+
+  private readSafeInsets(): ScreenInsets {
+    const canvas = this.game.canvas.getBoundingClientRect()
+    const app = this.game.canvas.closest('.app')
+    if (!app || canvas.width <= 0 || canvas.height <= 0) return { top: 0, right: 0, bottom: 0, left: 0 }
+    const bounds = app.getBoundingClientRect()
+    const style = getComputedStyle(app)
+    const inset = (edge: string): number => parseFloat(style.getPropertyValue(`--combat-safe-${edge}`)) || 0
+    // Letterboxing may already provide some/all of a physical safe inset.
+    return {
+      left: Math.max(0, inset('left') - (canvas.left - bounds.left)) * this.scale.width / canvas.width,
+      right: Math.max(0, inset('right') - (bounds.right - canvas.right)) * this.scale.width / canvas.width,
+      top: Math.max(0, inset('top') - (canvas.top - bounds.top)) * this.scale.height / canvas.height,
+      bottom: Math.max(0, inset('bottom') - (bounds.bottom - canvas.bottom)) * this.scale.height / canvas.height,
+    }
+  }
+
+  private positionWinnerText(): void {
+    this.winnerText?.setPosition(
+      (this.viewportWidth + this.safeInsets.left - this.safeInsets.right) / 2,
+      (this.viewportHeight + this.safeInsets.top - this.safeInsets.bottom) / 2,
+    )
+  }
+
+  private cleanupResponsiveLayout(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this)
+    this.parentResizeObserver?.disconnect()
+    this.parentResizeObserver = undefined
   }
 
   private updateHealthBars(): void {
