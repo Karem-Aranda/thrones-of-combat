@@ -7,6 +7,19 @@ export const MAX_VIEWPORT_WIDTH = 1600
 export const WORLD_WIDTH = 2400
 export const WORLD_HEIGHT = 720
 export const MAX_FIGHTER_SEPARATION = 1080
+export const GROUND_Y = 600
+export const GROUND_HEIGHT = 80
+export const GROUND_TOP = GROUND_Y - GROUND_HEIGHT / 2
+export const JUMP_VELOCITY = -650
+export const GRAVITY = 1800
+
+export type MovementState = 'grounded' | 'rising' | 'falling'
+
+export interface VerticalMovement {
+  footY: number
+  velocityY: number
+  movementState: MovementState
+}
 
 const CAMERA_EDGE_MARGIN = 80
 const CAMERA_RESPONSE_PER_SECOND = 8
@@ -18,6 +31,26 @@ const clamp = (value: number, min: number, max: number): number =>
 export function getFighterWorldSpawns(): [number, number] {
   const spawnOffset = (WORLD_WIDTH - VIEWPORT_WIDTH) / 2
   return [spawnOffset + 260, spawnOffset + 1020]
+}
+
+export function createVerticalMovement(): VerticalMovement {
+  return { footY: GROUND_TOP, velocityY: 0, movementState: 'grounded' }
+}
+
+/** Integrate constant gravity analytically; input is a fresh press, never a held key. */
+export function advanceVerticalMovement(
+  movement: VerticalMovement, jumpPressed: boolean, delta: number,
+): VerticalMovement {
+  const launches = jumpPressed && movement.movementState === 'grounded'
+  if (movement.movementState === 'grounded' && !launches) return movement
+
+  const seconds = Number.isFinite(delta) ? Math.max(0, delta) / 1000 : 0
+  const initialVelocity = launches ? JUMP_VELOCITY : movement.velocityY
+  const footY = movement.footY + initialVelocity * seconds + GRAVITY * seconds * seconds / 2
+  const velocityY = initialVelocity + GRAVITY * seconds
+
+  if (velocityY >= 0 && footY >= GROUND_TOP) return createVerticalMovement()
+  return { footY, velocityY, movementState: velocityY < 0 ? 'rising' : 'falling' }
 }
 
 export function getAdaptiveViewportWidth(availableWidth: number, availableHeight: number): number {
