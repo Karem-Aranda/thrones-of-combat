@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
+import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
 import {
   GROUND_TOP, GRAVITY, JUMP_VELOCITY, WORLD_WIDTH, MAX_FIGHTER_SEPARATION,
   createVerticalMovement, advanceVerticalMovement, getFighterWorldSpawns,
@@ -170,6 +171,7 @@ runInNewContext(compiledScene, {
     if (name === 'phaser') return { Scene: class {}, Input: { Keyboard: { JustDown } } }
     if (name === '../controls/TouchControls') return {}
     if (name === '../world/combatWorld') return combatWorld
+    if (name === '../combat/attackDefinitions') return attackDefinitions
     throw new Error(`Unexpected scene dependency: ${name}`)
   },
   window: { matchMedia: () => ({ matches: false }) },
@@ -182,7 +184,7 @@ const makeCompletedScene = (winner = 'PLAYER 1') => {
   const fighter = (x, facing) => ({
     container: { x, y: GROUND_TOP - 70 }, // Existing 140 px body center.
     vertical: createVerticalMovement(), facing, health: 100,
-    attackState: 'idle', attackPhaseElapsed: 0, attackHasHit: false,
+    ...attackDefinitions.createAttackRuntime(),
   })
   scene.playerOne = fighter(oneX, 'right')
   scene.playerTwo = fighter(twoX, 'left')
@@ -193,15 +195,21 @@ const makeCompletedScene = (winner = 'PLAYER 1') => {
     playerTwo: { left: { isDown: false }, right: { isDown: true } },
   }
   scene.pendingKeyboardJump = { playerOne: true, playerTwo: true }
-  scene.attackKeys = { playerOne: { _justDown: true }, playerTwo: { _justDown: true } }
+  scene.pendingKeyboardAttacks = {
+    playerOne: { light: true, heavy: true }, playerTwo: { light: true, heavy: true },
+  }
   scene.restartKey = { _justDown: false }
   const touchJumps = { playerOne: true, playerTwo: true }
-  const touchAttacks = { playerOne: true, playerTwo: true }
+  const touchAttacks = {
+    playerOne: { light: true, heavy: true }, playerTwo: { light: true, heavy: true },
+  }
   scene.touchControls = {
     setPresentation() {}, consumeRestart: () => false,
     isHeld: (_player, action) => action === 'right',
     consumeJump: player => { const pressed = touchJumps[player]; touchJumps[player] = false; return pressed },
-    consumeAttack: player => { const pressed = touchAttacks[player]; touchAttacks[player] = false; return pressed },
+    consumeAttack: (player, attack) => {
+      const pressed = touchAttacks[player][attack]; touchAttacks[player][attack] = false; return pressed
+    },
   }
   const presentation = { frames: 0, restarts: 0 }
   scene.scene = { restart: () => { presentation.restarts += 1 } }
@@ -267,8 +275,8 @@ test('completed scene consumes keyboard/touch attack presses without starting at
   for (const player of ['playerOne', 'playerTwo']) {
     assert.equal(scene[player].attackState, 'idle')
     assert.equal(scene[player].attackPhaseElapsed, 0)
-    assert.equal(scene.attackKeys[player]._justDown, false)
-    assert.equal(touchAttacks[player], false)
+    assert.deepEqual(scene.pendingKeyboardAttacks[player], { light: false, heavy: false })
+    assert.deepEqual(touchAttacks[player], { light: false, heavy: false })
   }
 })
 

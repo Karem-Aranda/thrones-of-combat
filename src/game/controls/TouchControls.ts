@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from '../world/combatWorld'
+import { type AttackId } from '../combat/attackDefinitions'
 
 export type PlayerId = 'playerOne' | 'playerTwo'
 export interface ScreenInsets {
@@ -8,7 +9,7 @@ export interface ScreenInsets {
   bottom: number
   left: number
 }
-type Action = 'left' | 'right' | 'jump' | 'attack' | 'restart'
+type Action = 'left' | 'right' | 'jump' | AttackId | 'restart'
 
 interface TouchButton {
   player?: PlayerId
@@ -24,13 +25,15 @@ interface TouchButton {
   baseY: number
 }
 
-const COMBAT_BUTTONS: Array<{ player: PlayerId; action: Action; x: number; width: number }> = [
+const COMBAT_BUTTONS: Array<{ player: PlayerId; action: Action; x: number; width: number; y?: number }> = [
   { player: 'playerOne', action: 'left', x: 100, width: 100 },
   { player: 'playerOne', action: 'right', x: 218, width: 100 },
-  { player: 'playerOne', action: 'attack', x: 368, width: 112 },
+  { player: 'playerOne', action: 'light', x: 368, width: 112 },
+  { player: 'playerOne', action: 'heavy', x: 368, width: 112, y: 500 },
   { player: 'playerOne', action: 'jump', x: 520, width: 100 },
   { player: 'playerTwo', action: 'jump', x: 760, width: 100 },
-  { player: 'playerTwo', action: 'attack', x: 912, width: 112 },
+  { player: 'playerTwo', action: 'light', x: 912, width: 112 },
+  { player: 'playerTwo', action: 'heavy', x: 912, width: 112, y: 500 },
   { player: 'playerTwo', action: 'left', x: 1062, width: 100 },
   { player: 'playerTwo', action: 'right', x: 1180, width: 100 },
 ]
@@ -38,7 +41,9 @@ const COMBAT_BUTTONS: Array<{ player: PlayerId; action: Action; x: number; width
 export class TouchControls {
   private readonly buttons: TouchButton[]
   private readonly restartButton: TouchButton
-  private readonly pendingAttack: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
+  private readonly pendingAttack: Record<PlayerId, Record<AttackId, boolean>> = {
+    playerOne: { light: false, heavy: false }, playerTwo: { light: false, heavy: false },
+  }
   private readonly pendingJump: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
   private pendingRestart = false
   private presentation = ''
@@ -47,8 +52,8 @@ export class TouchControls {
   private safeInsets: ScreenInsets = { top: 0, right: 0, bottom: 0, left: 0 }
 
   constructor(private readonly scene: Phaser.Scene) {
-    this.buttons = COMBAT_BUTTONS.map(({ player, action, x, width }) =>
-      this.addButton(x, 630, width, action === 'attack' ? 112 : 100, action, player),
+    this.buttons = COMBAT_BUTTONS.map(({ player, action, x, width, y = 630 }) =>
+      this.addButton(x, y, width, action === 'light' || action === 'heavy' ? 112 : 100, action, player),
     )
     this.restartButton = this.addButton(640, 470, 260, 100, 'restart')
     this.scene.input.on('pointerup', this.releasePointer)
@@ -82,9 +87,9 @@ export class TouchControls {
     )
   }
 
-  consumeAttack(player: PlayerId): boolean {
-    const pressed = this.pendingAttack[player]
-    this.pendingAttack[player] = false
+  consumeAttack(player: PlayerId, attack: AttackId): boolean {
+    const pressed = this.pendingAttack[player][attack]
+    this.pendingAttack[player][attack] = false
     return pressed
   }
 
@@ -101,8 +106,10 @@ export class TouchControls {
   }
 
   clear = (): void => {
-    this.pendingAttack.playerOne = false
-    this.pendingAttack.playerTwo = false
+    for (const pending of Object.values(this.pendingAttack)) {
+      pending.light = false
+      pending.heavy = false
+    }
     this.pendingJump.playerOne = false
     this.pendingJump.playerTwo = false
     this.pendingRestart = false
@@ -137,9 +144,9 @@ export class TouchControls {
   ): TouchButton {
     const graphic = this.scene.add.graphics().setPosition(x, y).setDepth(10).setScrollFactor(0)
     const zone = this.scene.add.zone(x, y, width, height).setDepth(11).setScrollFactor(0).setInteractive()
-    const caption = action === 'restart'
-      ? this.scene.add.text(x, y, 'RESTART', {
-          fontFamily: 'Georgia, serif', fontSize: '30px', color: '#e7ddc9',
+    const caption = action === 'restart' || action === 'light' || action === 'heavy'
+      ? this.scene.add.text(x, y, action.toUpperCase(), {
+          fontFamily: 'Georgia, serif', fontSize: action === 'restart' ? '30px' : '18px', color: '#e7ddc9',
         }).setOrigin(0.5).setDepth(10).setScrollFactor(0)
       : undefined
     const button: TouchButton = {
@@ -151,7 +158,7 @@ export class TouchControls {
     zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!button.active || button.pointers.has(pointer.id)) return
       button.pointers.add(pointer.id)
-      if (action === 'attack' && player) this.pendingAttack[player] = true
+      if ((action === 'light' || action === 'heavy') && player) this.pendingAttack[player][action] = true
       if (action === 'jump' && player) this.pendingJump[player] = true
       if (action === 'restart') this.pendingRestart = true
       this.drawButton(button)
@@ -175,7 +182,7 @@ export class TouchControls {
       Math.max(0, this.safeInsets.bottom - bottomMargin)
     button.graphic.setPosition(x, y)
     button.zone.setPosition(x, y)
-    button.caption?.setPosition(x, y)
+    button.caption?.setPosition(x, button.action === 'restart' ? y : y + button.height / 2 - 14)
   }
 
   private drawButton(button: TouchButton): void {
@@ -184,7 +191,7 @@ export class TouchControls {
     graphic.clear()
     graphic.fillStyle(0x191d20, pressed ? 0.8 : 0.45)
     graphic.lineStyle(pressed ? 3 : 2, 0x9a7851, pressed ? 0.95 : 0.65)
-    if (action === 'attack') {
+    if (action === 'light' || action === 'heavy') {
       const inset = 18
       graphic.beginPath()
       graphic.moveTo(-width / 2 + inset, -height / 2)
@@ -216,6 +223,7 @@ export class TouchControls {
     } else {
       graphic.lineBetween(-20, 22, 19, -20)
       graphic.lineBetween(-21, 12, -10, 23)
+      if (action === 'heavy') graphic.lineBetween(-8, 22, 28, -16)
     }
   }
 
