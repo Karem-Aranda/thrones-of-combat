@@ -8,7 +8,7 @@ export interface ScreenInsets {
   bottom: number
   left: number
 }
-type Action = 'left' | 'right' | 'attack' | 'restart'
+type Action = 'left' | 'right' | 'jump' | 'attack' | 'restart'
 
 interface TouchButton {
   player?: PlayerId
@@ -28,6 +28,8 @@ const COMBAT_BUTTONS: Array<{ player: PlayerId; action: Action; x: number; width
   { player: 'playerOne', action: 'left', x: 100, width: 100 },
   { player: 'playerOne', action: 'right', x: 218, width: 100 },
   { player: 'playerOne', action: 'attack', x: 368, width: 112 },
+  { player: 'playerOne', action: 'jump', x: 520, width: 100 },
+  { player: 'playerTwo', action: 'jump', x: 760, width: 100 },
   { player: 'playerTwo', action: 'attack', x: 912, width: 112 },
   { player: 'playerTwo', action: 'left', x: 1062, width: 100 },
   { player: 'playerTwo', action: 'right', x: 1180, width: 100 },
@@ -37,6 +39,7 @@ export class TouchControls {
   private readonly buttons: TouchButton[]
   private readonly restartButton: TouchButton
   private readonly pendingAttack: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
+  private readonly pendingJump: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
   private pendingRestart = false
   private presentation = ''
   private viewportWidth = VIEWPORT_WIDTH
@@ -85,6 +88,12 @@ export class TouchControls {
     return pressed
   }
 
+  consumeJump(player: PlayerId): boolean {
+    const pressed = this.pendingJump[player]
+    this.pendingJump[player] = false
+    return pressed
+  }
+
   consumeRestart(): boolean {
     const pressed = this.pendingRestart
     this.pendingRestart = false
@@ -94,6 +103,8 @@ export class TouchControls {
   clear = (): void => {
     this.pendingAttack.playerOne = false
     this.pendingAttack.playerTwo = false
+    this.pendingJump.playerOne = false
+    this.pendingJump.playerTwo = false
     this.pendingRestart = false
     for (const button of [...this.buttons, this.restartButton]) {
       if (button.pointers.size === 0) continue
@@ -141,6 +152,7 @@ export class TouchControls {
       if (!button.active || button.pointers.has(pointer.id)) return
       button.pointers.add(pointer.id)
       if (action === 'attack' && player) this.pendingAttack[player] = true
+      if (action === 'jump' && player) this.pendingJump[player] = true
       if (action === 'restart') this.pendingRestart = true
       this.drawButton(button)
     })
@@ -198,6 +210,9 @@ export class TouchControls {
     } else if (action === 'right') {
       graphic.lineBetween(-12, -20, 12, 0)
       graphic.lineBetween(12, 0, -12, 20)
+    } else if (action === 'jump') {
+      graphic.lineBetween(-20, 12, 0, -12)
+      graphic.lineBetween(0, -12, 20, 12)
     } else {
       graphic.lineBetween(-20, 22, 19, -20)
       graphic.lineBetween(-21, 12, -10, 23)

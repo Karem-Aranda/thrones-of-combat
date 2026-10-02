@@ -4,11 +4,9 @@ import {
   VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT,
   getFighterWorldSpawns, getAdaptiveViewportWidth, moveFightersWithinWorld,
   getCombatCameraTarget, getCombatCameraScroll,
+  GROUND_TOP, createVerticalMovement, advanceVerticalMovement, type VerticalMovement,
 } from '../world/combatWorld'
 
-const GROUND_Y = 600
-const GROUND_HEIGHT = 80
-const GROUND_TOP = GROUND_Y - GROUND_HEIGHT / 2
 // The approved cropped courtyard has a 20-pixel transparent strip above the paving.
 const NORTHWARD_COURTYARD_TOP_INSET = 20
 const NORTHWARD_DISTANCE_Y = 170
@@ -98,6 +96,7 @@ type JonVisualMode = 'idle' | 'move-forward' | 'move-retreat' | 'attack'
 
 interface Fighter {
   container: Phaser.GameObjects.Container
+  vertical: VerticalMovement
   visual?: Phaser.GameObjects.Image
   attackArea: Phaser.GameObjects.Rectangle
   facingMarker: Phaser.GameObjects.Rectangle
@@ -111,11 +110,13 @@ interface Fighter {
 interface MovementKeys {
   left: Phaser.Input.Keyboard.Key
   right: Phaser.Input.Keyboard.Key
+  jump: Phaser.Input.Keyboard.Key
 }
 
 interface FighterInput {
   leftHeld: boolean
   rightHeld: boolean
+  jumpPressed: boolean
   attackPressed: boolean
 }
 
@@ -183,6 +184,7 @@ export class CombatScene extends Phaser.Scene {
     playerOne: MovementKeys
     playerTwo: MovementKeys
   }
+  private pendingKeyboardJump: Record<PlayerId, boolean> = { playerOne: false, playerTwo: false }
 
   constructor() {
     super('CombatScene')
@@ -271,12 +273,19 @@ export class CombatScene extends Phaser.Scene {
       playerOne: {
         left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
         right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+        jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       },
       playerTwo: {
         left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
         right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+        jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
       },
     }
+    this.clearKeyboardJumps()
+    for (const keys of Object.values(this.movementKeys)) keys.jump.on('down', this.recordJumpPress)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupJumpInput, this)
+    window.addEventListener('blur', this.clearKeyboardJumps)
+    document.addEventListener('visibilitychange', this.clearKeyboardJumps)
     this.attackKeys = {
       playerOne: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
       playerTwo: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
@@ -317,7 +326,8 @@ export class CombatScene extends Phaser.Scene {
         this.scene.restart()
         return
       }
-      // Gameplay stays locked, but the brief KO/cue presentation can finish.
+      // Gameplay stays locked; existing airborne trajectories still settle naturally.
+      this.settleFightersVertically(delta)
       this.updateJonVisual(delta, 0)
       this.updateVfx(delta)
       return
@@ -346,11 +356,33 @@ export class CombatScene extends Phaser.Scene {
   ): FighterInput {
     const keyboardAttack = Phaser.Input.Keyboard.JustDown(attackKey)
     const touchAttack = this.touchControls.consumeAttack(player)
+    const keyboardJump = this.pendingKeyboardJump[player]
+    this.pendingKeyboardJump[player] = false
+    const touchJump = this.touchControls.consumeJump(player)
     return {
       leftHeld: keys.left.isDown || this.touchControls.isHeld(player, 'left'),
       rightHeld: keys.right.isDown || this.touchControls.isHeld(player, 'right'),
+      jumpPressed: keyboardJump || touchJump,
       attackPressed: keyboardAttack || touchAttack,
     }
+  }
+
+  private recordJumpPress = (key: Phaser.Input.Keyboard.Key, event: KeyboardEvent): void => {
+    if (event.repeat) return
+    const player = key === this.movementKeys.playerOne.jump ? 'playerOne' : 'playerTwo'
+    this.pendingKeyboardJump[player] = true
+  }
+
+  private clearKeyboardJumps = (): void => {
+    this.pendingKeyboardJump.playerOne = false
+    this.pendingKeyboardJump.playerTwo = false
+  }
+
+  private cleanupJumpInput(): void {
+    for (const keys of Object.values(this.movementKeys)) keys.jump.off('down', this.recordJumpPress)
+    window.removeEventListener('blur', this.clearKeyboardJumps)
+    document.removeEventListener('visibilitychange', this.clearKeyboardJumps)
+    this.clearKeyboardJumps()
   }
 
   private startAmbienceIfUnlocked(): void {
@@ -409,6 +441,11 @@ export class CombatScene extends Phaser.Scene {
     if (this.playerOne.attackState !== 'idle') {
       mode = 'attack'
       frameKey = this.getJonAttackFrame(this.playerOne)
+    } else if (this.playerOne.vertical.movementState !== 'grounded') {
+      // US-29 has no jump artwork: keep the existing guard attached to the airborne body.
+      mode = 'idle'
+      frameKey = 'jon-snow-guard'
+      this.jonVisualElapsed = 0
     } else {
       mode = 'idle'
       if (movedX !== 0) {
@@ -584,6 +621,13 @@ export class CombatScene extends Phaser.Scene {
     return elapsed < 100 ? 'jon-attack-r-1' : elapsed < 200 ? 'jon-attack-r-2' : 'jon-attack-r-3'
   }
 
+  private settleFightersVertically(delta: number): void {
+    for (const fighter of [this.playerOne, this.playerTwo]) {
+      fighter.vertical = advanceVerticalMovement(fighter.vertical, false, delta)
+      fighter.container.y = fighter.vertical.footY - FIGHTER_HEIGHT / 2
+    }
+  }
+
   private moveFighters(playerOneInput: FighterInput, playerTwoInput: FighterInput, delta: number): void {
     const distance = (input: FighterInput): number =>
       (Number(input.rightHeld) - Number(input.leftHeld)) * PLAYER_MOVE_SPEED * delta / 1000
@@ -593,6 +637,13 @@ export class CombatScene extends Phaser.Scene {
     )
     this.playerOne.container.x = playerOneX
     this.playerTwo.container.x = playerTwoX
+    for (const [fighter, input] of [[this.playerOne, playerOneInput], [this.playerTwo, playerTwoInput]] as const) {
+      // Finish grounded attacks before allowing jump; never carry an attack into the air.
+      fighter.vertical = advanceVerticalMovement(
+        fighter.vertical, input.jumpPressed && fighter.attackState === 'idle', delta,
+      )
+      fighter.container.y = fighter.vertical.footY - FIGHTER_HEIGHT / 2
+    }
   }
 
   private updateFacing(): void {
@@ -618,7 +669,7 @@ export class CombatScene extends Phaser.Scene {
 
   private tryStartAttack(fighter: Fighter, attackPressed: boolean): void {
     // Consume each press even during an attack, so inputs are not queued.
-    if (attackPressed && fighter.attackState === 'idle') {
+    if (attackPressed && fighter.attackState === 'idle' && fighter.vertical.movementState === 'grounded') {
       fighter.attackState = 'startup'
       fighter.attackPhaseElapsed = 0
       fighter.attackHasHit = false
@@ -874,7 +925,8 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private addFighter(x: number, color: number, textureKey?: string): Fighter {
-    const fighterY = GROUND_TOP - FIGHTER_HEIGHT / 2
+    const vertical = createVerticalMovement()
+    const fighterY = vertical.footY - FIGHTER_HEIGHT / 2
 
     // Match the illustrated head-to-foot height to the existing fighter height.
     // Only the image flips: container position and collision geometry stay unchanged.
@@ -915,6 +967,7 @@ export class CombatScene extends Phaser.Scene {
 
     return {
       container: this.add.container(x, fighterY, [body, facingMarker, attackArea]),
+      vertical,
       visual,
       attackArea,
       facingMarker,
