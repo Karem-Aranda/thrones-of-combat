@@ -7,6 +7,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as attacks from '../src/game/combat/attackDefinitions.ts'
 import * as world from '../src/game/world/combatWorld.ts'
+import * as reactions from '../src/game/combat/hitReaction.ts'
 
 const { ATTACK_DEFINITIONS: definitions, createAttackRuntime, selectAttack } = attacks
 const require = createRequire(import.meta.url)
@@ -57,6 +58,7 @@ const loadClass = (path, dependencies) => {
 const touchModule = loadClass('../src/game/controls/TouchControls.ts', { '../world/combatWorld': world })
 const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../world/combatWorld': world, '../combat/attackDefinitions': attacks,
+  '../combat/hitReaction': reactions,
   '../controls/TouchControls': touchModule,
 })
 
@@ -156,12 +158,14 @@ test('Light preserves the complete timing, damage and geometry baseline', () => 
   assert.deepEqual(definitions.light, {
     id: 'light', startupMs: 180, activeMs: 220, recoveryMs: 300,
     damage: 10, reach: 100, height: 70, swingCueMs: 140,
+    hitstunMs: 180, knockbackDistance: 45,
   })
 })
 test('Heavy is defined, slower, stronger and 25% longer-reaching without enlarging hurtboxes', () => {
   assert.deepEqual(definitions.heavy, {
     id: 'heavy', startupMs: 300, activeMs: 240, recoveryMs: 420,
     damage: 18, reach: 125, height: 70, swingCueMs: 240,
+    hitstunMs: 320, knockbackDistance: 90,
   })
   assert.ok(definitions.heavy.startupMs > definitions.light.startupMs)
   assert.equal(definitions.heavy.reach / definitions.light.reach, 1.25)

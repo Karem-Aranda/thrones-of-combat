@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
+import * as hitReaction from '../src/game/combat/hitReaction.ts'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
 import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
 import {
@@ -172,6 +173,7 @@ runInNewContext(compiledScene, {
     if (name === '../controls/TouchControls') return {}
     if (name === '../world/combatWorld') return combatWorld
     if (name === '../combat/attackDefinitions') return attackDefinitions
+    if (name === '../combat/hitReaction') return hitReaction
     throw new Error(`Unexpected scene dependency: ${name}`)
   },
   window: { matchMedia: () => ({ matches: false }) },
@@ -185,6 +187,7 @@ const makeCompletedScene = (winner = 'PLAYER 1') => {
     container: { x, y: GROUND_TOP - 70 }, // Existing 140 px body center.
     vertical: createVerticalMovement(), facing, health: 100,
     ...attackDefinitions.createAttackRuntime(),
+    reaction: hitReaction.createNeutralReaction(),
   })
   scene.playerOne = fighter(oneX, 'right')
   scene.playerTwo = fighter(twoX, 'left')

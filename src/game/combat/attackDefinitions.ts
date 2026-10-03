@@ -11,16 +11,20 @@ export interface AttackDefinition {
   readonly reach: number
   readonly height: number
   readonly swingCueMs: number
+  readonly hitstunMs: number
+  readonly knockbackDistance: number
 }
 
 export const ATTACK_DEFINITIONS: Readonly<Record<AttackId, AttackDefinition>> = Object.freeze({
   light: Object.freeze({
     id: 'light', startupMs: 180, activeMs: 220, recoveryMs: 300,
     damage: 10, reach: 100, height: 70, swingCueMs: 140,
+    hitstunMs: 180, knockbackDistance: 45,
   }),
   heavy: Object.freeze({
     id: 'heavy', startupMs: 300, activeMs: 240, recoveryMs: 420,
     damage: 18, reach: 125, height: 70, swingCueMs: 240,
+    hitstunMs: 320, knockbackDistance: 90,
   }),
 })
 
