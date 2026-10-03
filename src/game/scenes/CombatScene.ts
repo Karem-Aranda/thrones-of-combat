@@ -20,7 +20,12 @@ const FIGHTER_HEIGHT = 140
 const JON_SNOW_TEXTURE_HEIGHT = 1374
 const JON_SNOW_HEAD_Y = 128
 const JON_SNOW_FOOT_Y = 1329
-const JON_IMAGE_SCALE = 3 * FIGHTER_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y)
+// One centralized presentation rule: 240 logical px at the fixed 720 px height.
+// FIT preserves this 33.3% canvas-height share on desktop and mobile landscape.
+// It is independent of the unchanged 72×140 gameplay body and camera zoom.
+const JON_CANVAS_HEIGHT_FRACTION = 1 / 3
+const JON_VISUAL_HEIGHT = VIEWPORT_HEIGHT * JON_CANVAS_HEIGHT_FRACTION
+const JON_IMAGE_SCALE = 3 * JON_VISUAL_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y)
 const JON_IDLE_FRAMES = [
   'jon-snow-guard', 'jon-idle-2', 'jon-idle-3', 'jon-idle-2',
   'jon-snow-guard', 'jon-idle-4', 'jon-snow-guard',
@@ -987,7 +992,7 @@ export class CombatScene extends Phaser.Scene {
     const vertical = createVerticalMovement()
     const fighterY = vertical.footY - FIGHTER_HEIGHT / 2
 
-    // Match the illustrated head-to-foot height to the existing fighter height.
+    // Scale the illustration independently; its sole origin stays at the gameplay foot.
     // Only the image flips: container position and collision geometry stay unchanged.
     const visual = textureKey
       ? this.add

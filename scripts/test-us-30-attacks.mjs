@@ -75,10 +75,12 @@ const display = (x = 0, y = 0, width = 0, height = 0) => {
   object.setDisplaySize = object.setSize
   object.setVisible = visible => { object.visible = visible; return object }
   object.setTexture = key => { object.texture.key = key; return object }
+  object.setScale = (x, y = x) => { object.scaleX = x; object.scaleY = y; return object }
+  object.setOrigin = (x, y = x) => { object.originX = x; object.originY = y; return object }
   return object
 }
 
-const makeScene = () => {
+export const makeScene = () => {
   coarse = false
   portrait = false
   const scene = new CombatScene()
