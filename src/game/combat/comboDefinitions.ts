@@ -5,14 +5,15 @@ export const COMBO_CONTINUATIONS: Readonly<Record<AttackId, number>> = Object.fr
   heavy: 160,
 })
 export interface ComboRuntime {
+  damageConfirmed: boolean
   step: 0 | 1 | 2
   bufferedAttack: AttackId | null
 }
 export function createComboRuntime(): ComboRuntime {
-  return { step: 0, bufferedAttack: null }
+  return { step: 0, bufferedAttack: null, damageConfirmed: false }
 }
 /** Only the confirmed first Light has outgoing links; either second attack ends. */
 export function canContinue(attack: AttackRuntime, combo: ComboRuntime): boolean {
   return combo.step === 1 && attack.currentAttack === 'light' &&
-    attack.attackState === 'active' && attack.attackHasHit
+    attack.attackState === 'active' && combo.damageConfirmed
 }

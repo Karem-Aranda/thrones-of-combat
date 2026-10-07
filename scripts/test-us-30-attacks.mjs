@@ -9,6 +9,7 @@ import * as attacks from '../src/game/combat/attackDefinitions.ts'
 import * as world from '../src/game/world/combatWorld.ts'
 import * as reactions from '../src/game/combat/hitReaction.ts'
 import * as combos from '../src/game/combat/comboDefinitions.ts'
+import * as blocks from '../src/game/combat/blockDefinitions.ts'
 
 const { ATTACK_DEFINITIONS: definitions, createAttackRuntime, selectAttack } = attacks
 const require = createRequire(import.meta.url)
@@ -20,6 +21,7 @@ const EventEmitter = require('eventemitter3')
 const browserTarget = () => ({ addEventListener() {}, removeEventListener() {} })
 let coarse = false
 let portrait = false
+export const setInputEnvironment = (touch, rotated = false) => { coarse = touch; portrait = rotated }
 const windowStub = {
   ...browserTarget(), innerWidth: 1280, innerHeight: 720,
   matchMedia: query => ({ matches: query.includes('coarse') ? coarse : portrait }),
@@ -61,6 +63,7 @@ const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../world/combatWorld': world, '../combat/attackDefinitions': attacks,
   '../combat/hitReaction': reactions,
   '../combat/comboDefinitions': combos,
+  '../combat/blockDefinitions': blocks,
   '../controls/TouchControls': touchModule,
 })
 
@@ -106,7 +109,9 @@ export const makeScene = () => {
   scene.input.scene = scene
   scene.input.systems = { game: {} }
   scene.input.pluginEvents = new EventEmitter()
-  scene.input.manager = { keyboard: { queue: [], addCapture() {} } }
+  scene.input.manager = { keyboard: {
+    queue: [], captures: [], addCapture(code) { this.captures.push(code) },
+  } }
   scene.input.keyboard = new KeyboardPlugin(scene.input)
   scene.sound = {
     locked: false, add: name => { const instance = sound(); sounds.set(name, instance); return instance },
@@ -474,7 +479,7 @@ test('actual touch zones converge with keyboard input and clear pointer/pending 
   assert.equal(scene.touchControls.buttons.every(button => button.active), true)
 })
 
-test('ten temporary touch controls are non-overlapping and safe at supported widths/insets', () => {
+test('twelve temporary touch controls are non-overlapping and safe at supported widths/insets', () => {
   const scene = makeScene()
   for (const width of [1280, 1558, 1600]) {
     for (const insets of [
@@ -483,7 +488,7 @@ test('ten temporary touch controls are non-overlapping and safe at supported wid
     ]) {
       scene.touchControls.setViewport(width, 720, insets)
       const buttons = scene.touchControls.buttons
-      assert.equal(buttons.length, 10)
+      assert.equal(buttons.length, 12)
       for (const button of buttons) {
         assert.ok(button.zone.x - button.width / 2 >= insets.left)
         assert.ok(button.zone.x + button.width / 2 <= width - insets.right)

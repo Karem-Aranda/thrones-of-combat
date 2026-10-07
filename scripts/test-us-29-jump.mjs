@@ -7,6 +7,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as hitReaction from '../src/game/combat/hitReaction.ts'
 import * as combos from '../src/game/combat/comboDefinitions.ts'
+import * as blocks from '../src/game/combat/blockDefinitions.ts'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
 import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
 import {
@@ -176,6 +177,7 @@ runInNewContext(compiledScene, {
     if (name === '../combat/attackDefinitions') return attackDefinitions
     if (name === '../combat/hitReaction') return hitReaction
     if (name === '../combat/comboDefinitions') return combos
+    if (name === '../combat/blockDefinitions') return blocks
     throw new Error(`Unexpected scene dependency: ${name}`)
   },
   window: { matchMedia: () => ({ matches: false }) },
