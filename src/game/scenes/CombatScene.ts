@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { COMBO_CONTINUATIONS, createComboRuntime, canContinue, type ComboRuntime } from '../combat/comboDefinitions'
 import { createNeutralReaction, createHitReaction, advanceHitReaction, type HitReaction } from '../combat/hitReaction'
 import { TouchControls, type PlayerId, type ScreenInsets } from '../controls/TouchControls'
 import {
@@ -97,6 +98,7 @@ type Winner = 'PLAYER 1' | 'PLAYER 2'
 type JonVisualMode = 'idle' | 'move-forward' | 'move-retreat' | 'attack'
 
 interface Fighter extends AttackRuntime {
+  combo: ComboRuntime
   reaction: HitReaction
   container: Phaser.GameObjects.Container
   vertical: VerticalMovement
@@ -368,9 +370,15 @@ export class CombatScene extends Phaser.Scene {
     const jonWasActive = this.playerOne.attackState === 'active'
     this.tryStartAttack(this.playerOne, playerOneAttack)
     this.tryStartAttack(this.playerTwo, playerTwoAttack)
+    this.bufferContinuation(this.playerOne, playerOneAttack)
+    this.bufferContinuation(this.playerTwo, playerTwoAttack)
     this.advanceAttack(this.playerOne, this.playerTwo, delta)
     this.advanceAttack(this.playerTwo, this.playerOne, delta)
     if (!jonWasActive && this.playerOne.attackState === 'active') this.jonTrailElapsed = 0
+    // Launch after both resolutions: none of this update's elapsed time belongs
+    // to a new continuation, and a P1 hit can retire P2's unresolved buffer.
+    this.launchContinuation(this.playerOne)
+    this.launchContinuation(this.playerTwo)
     this.updateJonVisual(delta, playerOneStunned ? 0 : this.playerOne.container.x - previousPlayerOneX)
     this.updateVfx(delta)
   }
@@ -666,7 +674,10 @@ export class CombatScene extends Phaser.Scene {
   private getJonAttackFrame(fighter: Fighter): string {
     if (!fighter.currentAttack || fighter.attackState === 'idle') return 'jon-snow-guard'
     const elapsed = getAttackPresentationElapsed(
-      ATTACK_DEFINITIONS[fighter.currentAttack], fighter.attackState, fighter.attackPhaseElapsed,
+      ATTACK_DEFINITIONS[fighter.currentAttack], fighter.attackState,
+      fighter.attackState === 'startup'
+        ? fighter.attackPhaseElapsed * ATTACK_DEFINITIONS[fighter.currentAttack].startupMs / this.attackStartup(fighter)
+        : fighter.attackPhaseElapsed,
     )
     if (fighter.attackState === 'startup') {
       return elapsed < 90 ? 'jon-attack-s-1' : 'jon-attack-s-2'
@@ -745,13 +756,43 @@ export class CombatScene extends Phaser.Scene {
       fighter.attackState = 'startup'
       fighter.attackPhaseElapsed = 0
       fighter.attackHasHit = false
+      fighter.combo = { step: 1, bufferedAttack: null }
       this.positionAttackArea(fighter)
       if (fighter === this.playerOne) this.jonSwingPlayed = false
     }
   }
 
+  private attackStartup(fighter: Fighter): number {
+    const id = fighter.currentAttack ?? 'light'
+    return fighter.combo.step === 2 ? COMBO_CONTINUATIONS[id] : ATTACK_DEFINITIONS[id].startupMs
+  }
+
+  private bufferContinuation(fighter: Fighter, attack: AttackId | null): void {
+    if (this.winner || fighter.reaction.reactionState !== 'neutral' || fighter.vertical.movementState !== 'grounded') {
+      fighter.combo = createComboRuntime()
+      return
+    }
+    if (attack && canContinue(fighter, fighter.combo) && fighter.combo.bufferedAttack === null) {
+      fighter.combo.bufferedAttack = attack
+    }
+  }
+
+  private launchContinuation(fighter: Fighter): void {
+    const attack = fighter.combo.bufferedAttack
+    if (!attack) return
+    if (this.winner || fighter.reaction.reactionState !== 'neutral' ||
+        fighter.vertical.movementState !== 'grounded' || !canContinue(fighter, fighter.combo)) {
+      fighter.combo = createComboRuntime()
+      return
+    }
+    this.cancelAttack(fighter)
+    this.tryStartAttack(fighter, attack)
+    fighter.combo.step = 2
+  }
+
   private cancelAttack(fighter: Fighter): void {
     Object.assign(fighter, createAttackRuntime())
+    fighter.combo = createComboRuntime()
     fighter.attackArea.setVisible(false)
     this.positionAttackArea(fighter)
     if (fighter === this.playerOne) {
@@ -773,12 +814,16 @@ export class CombatScene extends Phaser.Scene {
   private advanceAttack(fighter: Fighter, defender: Fighter, delta: number): void {
     if (this.winner || fighter.reaction.reactionState === 'hitstun' || fighter.attackState === 'idle' || !fighter.currentAttack) return
     const definition = ATTACK_DEFINITIONS[fighter.currentAttack]
+    const startupMs = this.attackStartup(fighter)
 
     fighter.attackPhaseElapsed += delta
+    // A shortened continuation can reach active before its unchanged swing cue.
+    const swingElapsed = fighter.attackState === 'active'
+      ? startupMs + fighter.attackPhaseElapsed : fighter.attackPhaseElapsed
     if (fighter === this.playerOne &&
-        fighter.attackState === 'startup' &&
+        (fighter.attackState === 'startup' || (fighter.combo.step === 2 && fighter.attackState === 'active')) &&
         !this.jonSwingPlayed &&
-        fighter.attackPhaseElapsed >= definition.swingCueMs) {
+        swingElapsed >= definition.swingCueMs) {
       this.jonSwingPlayed = true
       // A locked cue is discarded, never queued for later playback.
       if (!this.sound.locked && !this.swingSound.isPlaying) this.swingSound.play()
@@ -787,8 +832,8 @@ export class CombatScene extends Phaser.Scene {
     // Carry excess time into the next phase when a frame spans a boundary.
     while (fighter.attackState !== 'idle') {
       if (fighter.attackState === 'startup') {
-        if (fighter.attackPhaseElapsed < definition.startupMs) return
-        fighter.attackPhaseElapsed -= definition.startupMs
+        if (fighter.attackPhaseElapsed < startupMs) return
+        fighter.attackPhaseElapsed -= startupMs
         fighter.attackState = 'active'
         fighter.attackArea.setVisible(true)
       } else if (fighter.attackState === 'active') {
@@ -808,12 +853,14 @@ export class CombatScene extends Phaser.Scene {
         if (fighter.attackPhaseElapsed < definition.activeMs) return
         fighter.attackPhaseElapsed -= definition.activeMs
         fighter.attackState = 'recovery'
+        fighter.combo.bufferedAttack = null
         fighter.attackArea.setVisible(false)
       } else {
         if (fighter.attackPhaseElapsed < definition.recoveryMs) return
         fighter.attackPhaseElapsed = 0
         fighter.attackState = 'idle'
         fighter.currentAttack = null
+        fighter.combo = createComboRuntime()
         this.positionAttackArea(fighter)
       }
     }
@@ -1075,6 +1122,7 @@ export class CombatScene extends Phaser.Scene {
       container: this.add.container(x, fighterY, [body, facingMarker, attackArea]),
       vertical,
       reaction: createNeutralReaction(),
+      combo: createComboRuntime(),
       visual,
       attackArea,
       facingMarker,

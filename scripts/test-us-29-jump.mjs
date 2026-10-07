@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as hitReaction from '../src/game/combat/hitReaction.ts'
+import * as combos from '../src/game/combat/comboDefinitions.ts'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
 import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
 import {
@@ -174,6 +175,7 @@ runInNewContext(compiledScene, {
     if (name === '../world/combatWorld') return combatWorld
     if (name === '../combat/attackDefinitions') return attackDefinitions
     if (name === '../combat/hitReaction') return hitReaction
+    if (name === '../combat/comboDefinitions') return combos
     throw new Error(`Unexpected scene dependency: ${name}`)
   },
   window: { matchMedia: () => ({ matches: false }) },
@@ -188,6 +190,7 @@ const makeCompletedScene = (winner = 'PLAYER 1') => {
     vertical: createVerticalMovement(), facing, health: 100,
     ...attackDefinitions.createAttackRuntime(),
     reaction: hitReaction.createNeutralReaction(),
+    combo: combos.createComboRuntime(),
   })
   scene.playerOne = fighter(oneX, 'right')
   scene.playerTwo = fighter(twoX, 'left')
