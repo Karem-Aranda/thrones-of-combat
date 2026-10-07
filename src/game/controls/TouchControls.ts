@@ -9,7 +9,7 @@ export interface ScreenInsets {
   bottom: number
   left: number
 }
-type Action = 'left' | 'right' | 'jump' | AttackId | 'restart'
+type Action = 'left' | 'right' | 'jump' | 'block' | AttackId | 'restart'
 
 interface TouchButton {
   player?: PlayerId
@@ -31,7 +31,9 @@ const COMBAT_BUTTONS: Array<{ player: PlayerId; action: Action; x: number; width
   { player: 'playerOne', action: 'light', x: 368, width: 112 },
   { player: 'playerOne', action: 'heavy', x: 368, width: 112, y: 500 },
   { player: 'playerOne', action: 'jump', x: 520, width: 100 },
+  { player: 'playerOne', action: 'block', x: 520, width: 100, y: 500 },
   { player: 'playerTwo', action: 'jump', x: 760, width: 100 },
+  { player: 'playerTwo', action: 'block', x: 760, width: 100, y: 500 },
   { player: 'playerTwo', action: 'light', x: 912, width: 112 },
   { player: 'playerTwo', action: 'heavy', x: 912, width: 112, y: 500 },
   { player: 'playerTwo', action: 'left', x: 1062, width: 100 },
@@ -58,6 +60,7 @@ export class TouchControls {
     this.restartButton = this.addButton(640, 470, 260, 100, 'restart')
     this.scene.input.on('pointerup', this.releasePointer)
     this.scene.input.on('pointerupoutside', this.releasePointer)
+    this.scene.input.on('pointercancel', this.releasePointer)
     this.scene.input.on('gameout', this.clear)
     window.addEventListener('blur', this.clear)
     document.addEventListener('visibilitychange', this.clearWhenHidden)
@@ -81,7 +84,7 @@ export class TouchControls {
     for (const button of [...this.buttons, this.restartButton]) this.positionButton(button)
   }
 
-  isHeld(player: PlayerId, action: 'left' | 'right'): boolean {
+  isHeld(player: PlayerId, action: 'left' | 'right' | 'block'): boolean {
     return this.buttons.some(button =>
       button.player === player && button.action === action && button.pointers.size > 0,
     )
@@ -144,7 +147,7 @@ export class TouchControls {
   ): TouchButton {
     const graphic = this.scene.add.graphics().setPosition(x, y).setDepth(10).setScrollFactor(0)
     const zone = this.scene.add.zone(x, y, width, height).setDepth(11).setScrollFactor(0).setInteractive()
-    const caption = action === 'restart' || action === 'light' || action === 'heavy'
+    const caption = action === 'restart' || action === 'light' || action === 'heavy' || action === 'block'
       ? this.scene.add.text(x, y, action.toUpperCase(), {
           fontFamily: 'Georgia, serif', fontSize: action === 'restart' ? '30px' : '18px', color: '#e7ddc9',
         }).setOrigin(0.5).setDepth(10).setScrollFactor(0)
@@ -231,6 +234,7 @@ export class TouchControls {
     this.clear()
     this.scene.input.off('pointerup', this.releasePointer)
     this.scene.input.off('pointerupoutside', this.releasePointer)
+    this.scene.input.off('pointercancel', this.releasePointer)
     this.scene.input.off('gameout', this.clear)
     window.removeEventListener('blur', this.clear)
     document.removeEventListener('visibilitychange', this.clearWhenHidden)

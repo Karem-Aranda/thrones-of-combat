@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { createBlockReaction, guardEligible, guardFacesContact } from '../combat/blockDefinitions'
 import { COMBO_CONTINUATIONS, createComboRuntime, canContinue, type ComboRuntime } from '../combat/comboDefinitions'
 import { createNeutralReaction, createHitReaction, advanceHitReaction, type HitReaction } from '../combat/hitReaction'
 import { TouchControls, type PlayerId, type ScreenInsets } from '../controls/TouchControls'
@@ -98,6 +99,9 @@ type Winner = 'PLAYER 1' | 'PLAYER 2'
 type JonVisualMode = 'idle' | 'move-forward' | 'move-retreat' | 'attack'
 
 interface Fighter extends AttackRuntime {
+  guardEligible: boolean
+  guardIndicator: Phaser.GameObjects.Rectangle
+  guardCueMs: number
   combo: ComboRuntime
   reaction: HitReaction
   container: Phaser.GameObjects.Container
@@ -116,6 +120,7 @@ interface MovementKeys {
 }
 
 interface FighterInput {
+  blockHeld: boolean
   leftHeld: boolean
   rightHeld: boolean
   jumpPressed: boolean
@@ -147,6 +152,7 @@ interface HitFleck {
 }
 
 export class CombatScene extends Phaser.Scene {
+  private blockKeys?: Record<PlayerId, Phaser.Input.Keyboard.Key>
   private playerOne!: Fighter
   private playerTwo!: Fighter
   private attackKeys!: {
@@ -297,6 +303,10 @@ export class CombatScene extends Phaser.Scene {
         heavy: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SEMICOLON),
       },
     }
+    this.blockKeys = {
+      playerOne: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      playerTwo: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
+    }
     this.clearKeyboardPresses()
     for (const keys of Object.values(this.movementKeys)) keys.jump.on('down', this.recordJumpPress)
     for (const keys of Object.values(this.attackKeys)) {
@@ -338,7 +348,10 @@ export class CombatScene extends Phaser.Scene {
     const restartPressed = keyboardRestart || touchRestart
     const playerOneInput = this.readFighterInput('playerOne', this.movementKeys.playerOne)
     const playerTwoInput = this.readFighterInput('playerTwo', this.movementKeys.playerTwo)
-    if (portrait) return
+    if (portrait) {
+      this.clearBlockInput()
+      return
+    }
     if (this.winner) {
       if (restartPressed) {
         this.scene.restart()
@@ -352,13 +365,19 @@ export class CombatScene extends Phaser.Scene {
     }
 
     const previousPlayerOneX = this.playerOne.container.x
+    // Snapshot BEFORE reaction expiry; only held blockstun permits re-guard.
+    for (const [fighter, input] of [[this.playerOne, playerOneInput], [this.playerTwo, playerTwoInput]] as const) {
+      fighter.guardCueMs = Math.max(0, fighter.guardCueMs - delta)
+      fighter.guardEligible = guardEligible(input.blockHeld, !this.winner,
+        fighter.vertical.movementState === 'grounded', fighter.attackState === 'idle', fighter.reaction.reactionState)
+    }
     // Eligibility is sampled before timers advance: presses in the recovery frame are discarded.
-    const playerOneStunned = this.playerOne.reaction.reactionState === 'hitstun'
-    const playerTwoStunned = this.playerTwo.reaction.reactionState === 'hitstun'
+    const playerOneStunned = this.playerOne.reaction.reactionState !== 'neutral'
+    const playerTwoStunned = this.playerTwo.reaction.reactionState !== 'neutral'
     // An airborne press is discarded even if this same update resolves landing.
-    const playerOneAttack = !playerOneStunned && this.playerOne.vertical.movementState === 'grounded'
+    const playerOneAttack = !playerOneStunned && !this.playerOne.guardEligible && this.playerOne.vertical.movementState === 'grounded'
       ? selectAttack(playerOneInput.lightPressed, playerOneInput.heavyPressed) : null
-    const playerTwoAttack = !playerTwoStunned && this.playerTwo.vertical.movementState === 'grounded'
+    const playerTwoAttack = !playerTwoStunned && !this.playerTwo.guardEligible && this.playerTwo.vertical.movementState === 'grounded'
       ? selectAttack(playerTwoInput.lightPressed, playerTwoInput.heavyPressed) : null
     this.moveFighters(playerOneInput, playerTwoInput, delta)
     this.cameras.main.setScroll(getCombatCameraScroll(
@@ -379,6 +398,7 @@ export class CombatScene extends Phaser.Scene {
     // to a new continuation, and a P1 hit can retire P2's unresolved buffer.
     this.launchContinuation(this.playerOne)
     this.launchContinuation(this.playerTwo)
+    this.updateGuardPresentation(0)
     this.updateJonVisual(delta, playerOneStunned ? 0 : this.playerOne.container.x - previousPlayerOneX)
     this.updateVfx(delta)
   }
@@ -397,6 +417,7 @@ export class CombatScene extends Phaser.Scene {
     this.pendingKeyboardJump[player] = false
     const touchJump = this.touchControls.consumeJump(player)
     return {
+      blockHeld: Boolean(this.blockKeys?.[player].isDown || this.touchControls.isHeld(player, 'block')),
       leftHeld: keys.left.isDown || this.touchControls.isHeld(player, 'left'),
       rightHeld: keys.right.isDown || this.touchControls.isHeld(player, 'right'),
       jumpPressed: keyboardJump || touchJump,
@@ -427,11 +448,31 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private clearKeyboardPresses = (): void => {
+    this.clearBlockInput()
     this.pendingKeyboardJump.playerOne = false
     this.pendingKeyboardJump.playerTwo = false
     for (const pending of Object.values(this.pendingKeyboardAttacks)) {
       pending.light = false
       pending.heavy = false
+    }
+  }
+
+  private clearBlockInput(): void {
+    for (const key of Object.values(this.blockKeys ?? {})) key.reset()
+    for (const fighter of [this.playerOne, this.playerTwo]) {
+      if (!fighter) continue
+      fighter.guardEligible = false
+      fighter.guardCueMs = 0
+      fighter.guardIndicator.setVisible(false)
+    }
+  }
+
+  private updateGuardPresentation(delta: number): void {
+    for (const fighter of [this.playerOne, this.playerTwo]) {
+      fighter.guardCueMs = Math.max(0, fighter.guardCueMs - delta)
+      fighter.guardIndicator.x = (fighter.facing === 'right' ? 1 : -1) * (FIGHTER_WIDTH / 2 + 6)
+      fighter.guardIndicator.setVisible(!this.winner && (fighter.guardEligible || fighter.guardCueMs > 0))
+        .setAlpha(fighter.guardCueMs > 0 ? 1 : 0.55)
     }
   }
 
@@ -502,7 +543,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.playerOne.attackState !== 'idle') {
       mode = 'attack'
       frameKey = this.getJonAttackFrame(this.playerOne)
-    } else if (this.playerOne.reaction.reactionState === 'hitstun' || this.playerOne.vertical.movementState !== 'grounded') {
+    } else if (this.playerOne.guardEligible || this.playerOne.reaction.reactionState !== 'neutral' || this.playerOne.vertical.movementState !== 'grounded') {
       // Hold guard while airborne/stunned; knockback must not select walking frames.
       mode = 'idle'
       frameKey = 'jon-snow-guard'
@@ -698,21 +739,21 @@ export class CombatScene extends Phaser.Scene {
   private moveFighters(playerOneInput: FighterInput, playerTwoInput: FighterInput, delta: number): void {
     const distance = (input: FighterInput): number =>
       (Number(input.rightHeld) - Number(input.leftHeld)) * PLAYER_MOVE_SPEED * delta / 1000
-    const oneStunned = this.playerOne.reaction.reactionState === 'hitstun'
-    const twoStunned = this.playerTwo.reaction.reactionState === 'hitstun'
+    const oneStunned = this.playerOne.reaction.reactionState !== 'neutral'
+    const twoStunned = this.playerTwo.reaction.reactionState !== 'neutral'
     const oneReaction = advanceHitReaction(this.playerOne.reaction, delta)
     const twoReaction = advanceHitReaction(this.playerTwo.reaction, delta)
     const [playerOneX, playerTwoX] = moveFightersWithinWorld(
       this.playerOne.container.x, this.playerTwo.container.x,
-      oneStunned ? oneReaction.displacement : distance(playerOneInput),
-      twoStunned ? twoReaction.displacement : distance(playerTwoInput), FIGHTER_WIDTH / 2,
+      oneStunned ? oneReaction.displacement : this.playerOne.guardEligible ? 0 : distance(playerOneInput),
+      twoStunned ? twoReaction.displacement : this.playerTwo.guardEligible ? 0 : distance(playerTwoInput), FIGHTER_WIDTH / 2,
     )
     this.playerOne.container.x = playerOneX
     this.playerTwo.container.x = playerTwoX
     for (const [fighter, input] of [[this.playerOne, playerOneInput], [this.playerTwo, playerTwoInput]] as const) {
       // Finish grounded attacks before allowing jump; never carry an attack into the air.
       fighter.vertical = advanceVerticalMovement(
-        fighter.vertical, input.jumpPressed && fighter.attackState === 'idle' && fighter.reaction.reactionState === 'neutral', delta,
+        fighter.vertical, input.jumpPressed && !fighter.guardEligible && fighter.attackState === 'idle' && fighter.reaction.reactionState === 'neutral', delta,
       )
       fighter.container.y = fighter.vertical.footY - FIGHTER_HEIGHT / 2
     }
@@ -751,12 +792,12 @@ export class CombatScene extends Phaser.Scene {
 
   private tryStartAttack(fighter: Fighter, attack: AttackId | null): void {
     // Consume each press even during an attack, so inputs are not queued.
-    if (!this.winner && attack && fighter.reaction.reactionState === 'neutral' && fighter.attackState === 'idle' && fighter.vertical.movementState === 'grounded') {
+    if (!this.winner && !fighter.guardEligible && attack && fighter.reaction.reactionState === 'neutral' && fighter.attackState === 'idle' && fighter.vertical.movementState === 'grounded') {
       fighter.currentAttack = attack
       fighter.attackState = 'startup'
       fighter.attackPhaseElapsed = 0
       fighter.attackHasHit = false
-      fighter.combo = { step: 1, bufferedAttack: null }
+      fighter.combo = { step: 1, bufferedAttack: null, damageConfirmed: false }
       this.positionAttackArea(fighter)
       if (fighter === this.playerOne) this.jonSwingPlayed = false
     }
@@ -805,6 +846,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private clearCombatState(): void {
+    this.clearBlockInput()
     for (const fighter of [this.playerOne, this.playerTwo]) {
       this.cancelAttack(fighter)
       fighter.reaction = createNeutralReaction()
@@ -812,7 +854,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private advanceAttack(fighter: Fighter, defender: Fighter, delta: number): void {
-    if (this.winner || fighter.reaction.reactionState === 'hitstun' || fighter.attackState === 'idle' || !fighter.currentAttack) return
+    if (this.winner || fighter.reaction.reactionState !== 'neutral' || fighter.attackState === 'idle' || !fighter.currentAttack) return
     const definition = ATTACK_DEFINITIONS[fighter.currentAttack]
     const startupMs = this.attackStartup(fighter)
 
@@ -839,14 +881,27 @@ export class CombatScene extends Phaser.Scene {
       } else if (fighter.attackState === 'active') {
         const hit = this.checkAttackHit(fighter, defender)
         if (hit) {
-          this.applyDamage(defender, definition.damage)
-          if (!this.winner) {
-            this.cancelAttack(defender)
-            // Capture away-from-attacker direction once; equal centers use attack facing.
-            const direction = defender.container.x === fighter.container.x
-              ? (fighter.facing === 'right' ? 1 : -1)
-              : (defender.container.x > fighter.container.x ? 1 : -1)
-            defender.reaction = createHitReaction(definition, direction)
+          if (defender.guardEligible && defender.vertical.movementState === 'grounded' &&
+              defender.attackState === 'idle' && defender.reaction.reactionState !== 'hitstun' &&
+              guardFacesContact(fighter.container.x, defender.container.x, fighter.facing, defender.facing)) {
+            const direction = fighter.container.x === defender.container.x
+              ? (fighter.facing === 'right' ? 1 : -1) : defender.container.x > fighter.container.x ? 1 : -1
+            defender.reaction = createBlockReaction(fighter.currentAttack!, direction)
+            defender.guardCueMs = 90
+            fighter.combo.damageConfirmed = false
+            fighter.combo.bufferedAttack = null
+          } else {
+            this.applyDamage(defender, definition.damage)
+            if (!this.winner) {
+              fighter.combo.damageConfirmed = true
+              this.cancelAttack(defender)
+              defender.guardEligible = false
+              // Capture away-from-attacker direction once; equal centers use attack facing.
+              const direction = defender.container.x === fighter.container.x
+                ? (fighter.facing === 'right' ? 1 : -1)
+                : (defender.container.x > fighter.container.x ? 1 : -1)
+              defender.reaction = createHitReaction(definition, direction)
+            }
           }
         }
         if (this.winner) return
@@ -867,7 +922,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private checkAttackHit(attacker: Fighter, defender: Fighter): boolean {
-    if (this.winner || attacker.reaction.reactionState === 'hitstun' || attacker.attackState !== 'active' || attacker.attackHasHit || !attacker.currentAttack) return false
+    if (this.winner || attacker.reaction.reactionState !== 'neutral' || attacker.attackState !== 'active' || attacker.attackHasHit || !attacker.currentAttack) return false
     const definition = ATTACK_DEFINITIONS[attacker.currentAttack]
 
     // Use the facing-positioned visualization for identical world-space geometry.
@@ -1118,8 +1173,12 @@ export class CombatScene extends Phaser.Scene {
       .setStrokeStyle(3, 0xffffff)
       .setVisible(false)
 
+    const guardIndicator = this.add.rectangle(FIGHTER_WIDTH / 2 + 6, 0, 6, 58, 0xcbdce4).setVisible(false)
     return {
-      container: this.add.container(x, fighterY, [body, facingMarker, attackArea]),
+      container: this.add.container(x, fighterY, [body, facingMarker, attackArea, guardIndicator]),
+      guardEligible: false,
+      guardIndicator,
+      guardCueMs: 0,
       vertical,
       reaction: createNeutralReaction(),
       combo: createComboRuntime(),

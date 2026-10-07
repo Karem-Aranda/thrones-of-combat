@@ -1,7 +1,7 @@
 import type { AttackDefinition } from './attackDefinitions'
 
 export interface HitReaction {
-  reactionState: 'neutral' | 'hitstun'
+  reactionState: 'neutral' | 'hitstun' | 'blockstun'
   remainingMs: number
   knockbackVelocity: number
 }
