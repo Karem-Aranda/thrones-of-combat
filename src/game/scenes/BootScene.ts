@@ -15,6 +15,11 @@ const jonSnowAnimationUrls = import.meta.glob<string>(
   { eager: true, query: '?url', import: 'default' },
 )
 
+const lyraTextureUrls = import.meta.glob<string>(
+  '../../assets/fighters/lyra-frames/*.png',
+  { eager: true, query: '?url', import: 'default' },
+)
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene')
@@ -35,6 +40,11 @@ export class BootScene extends Phaser.Scene {
       const frameName = path.split('/').pop()?.replace(/\.png$/, '')
       if (!frameName) throw new Error(`Invalid Jon Snow frame path: ${path}`)
       this.load.image(`jon-${frameName}`, url)
+    }
+    for (const [path, url] of Object.entries(lyraTextureUrls)) {
+      const key = path.split('/').pop()?.replace(/\.png$/, '')
+      if (!key) throw new Error(`Invalid Lyra texture path: ${path}`)
+      this.load.image(key, url)
     }
   }
 

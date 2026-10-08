@@ -1,0 +1,25 @@
+state,index,filename,texture_key,approved_anchor
+Guard,1,textures/lyra-guard.png,lyra-guard,true
+Additional idle,1,textures/lyra-idle-2.png,lyra-idle-2,false
+Additional idle,2,textures/lyra-idle-3.png,lyra-idle-3,false
+Additional idle,3,textures/lyra-idle-4.png,lyra-idle-4,false
+Movement,1,textures/lyra-move-1.png,lyra-move-1,false
+Movement,2,textures/lyra-move-2.png,lyra-move-2,false
+Movement,3,textures/lyra-move-3.png,lyra-move-3,false
+Movement,4,textures/lyra-move-4.png,lyra-move-4,false
+Movement,5,textures/lyra-move-5.png,lyra-move-5,false
+Movement,6,textures/lyra-move-6.png,lyra-move-6,false
+Attack startup,1,textures/lyra-attack-s-1.png,lyra-attack-s-1,false
+Attack startup,2,textures/lyra-attack-s-2.png,lyra-attack-s-2,false
+Attack active,1,textures/lyra-attack-a-1.png,lyra-attack-a-1,false
+Attack active,2,textures/lyra-attack-a-2.png,lyra-attack-a-2,true
+Attack active,3,textures/lyra-attack-a-3.png,lyra-attack-a-3,false
+Attack recovery,1,textures/lyra-attack-r-1.png,lyra-attack-r-1,false
+Attack recovery,2,textures/lyra-attack-r-2.png,lyra-attack-r-2,false
+Attack recovery,3,textures/lyra-attack-r-3.png,lyra-attack-r-3,false
+Rising,1,textures/lyra-rising.png,lyra-rising,false
+Falling,1,textures/lyra-falling.png,lyra-falling,true
+Hit reaction,1,textures/lyra-hit-contact.png,lyra-hit-contact,false
+Hit reaction,2,textures/lyra-hit-recoil.png,lyra-hit-recoil,false
+KO,1,textures/lyra-ko-collapse.png,lyra-ko-collapse,false
+KO,2,textures/lyra-ko-hold.png,lyra-ko-hold,true

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { JON_VISUALS, LYRA_VISUALS, createVisualRuntime, phaseFrame, type FighterVisualConfig, type FighterVisualRuntime } from '../presentation/fighterVisuals'
 import { createBlockReaction, guardEligible, guardFacesContact } from '../combat/blockDefinitions'
 import { COMBO_CONTINUATIONS, createComboRuntime, canContinue, type ComboRuntime } from '../combat/comboDefinitions'
 import { createNeutralReaction, createHitReaction, advanceHitReaction, type HitReaction } from '../combat/hitReaction'
@@ -19,29 +20,8 @@ const NORTHWARD_COURTYARD_TOP_INSET = 20
 const NORTHWARD_DISTANCE_Y = 170
 const FIGHTER_WIDTH = 72
 const FIGHTER_HEIGHT = 140
-// Landmarks remain in the original source coordinates after the 1/3-size resample.
-const JON_SNOW_TEXTURE_HEIGHT = 1374
-const JON_SNOW_HEAD_Y = 128
-const JON_SNOW_FOOT_Y = 1329
-// One centralized presentation rule: 240 logical px at the fixed 720 px height.
-// FIT preserves this 33.3% canvas-height share on desktop and mobile landscape.
-// It is independent of the unchanged 72×140 gameplay body and camera zoom.
-const JON_CANVAS_HEIGHT_FRACTION = 1 / 3
-const JON_VISUAL_HEIGHT = VIEWPORT_HEIGHT * JON_CANVAS_HEIGHT_FRACTION
-const JON_IMAGE_SCALE = 3 * JON_VISUAL_HEIGHT / (JON_SNOW_FOOT_Y - JON_SNOW_HEAD_Y)
-const JON_IDLE_FRAMES = [
-  'jon-snow-guard', 'jon-idle-2', 'jon-idle-3', 'jon-idle-2',
-  'jon-snow-guard', 'jon-idle-4', 'jon-snow-guard',
-]
-const JON_MOVE_FRAMES = [
-  'jon-move-1', 'jon-move-2', 'jon-move-3',
-  'jon-move-4', 'jon-move-5', 'jon-move-6',
-]
-const JON_IDLE_FRAME_MS = 300 // Seven poses over 2.1 seconds.
-const JON_MOVE_FRAME_MS = 100 // Six combat steps over 0.6 seconds.
-const JON_HIT_CONTACT_MS = 30
-const JON_HIT_RECOIL_MS = 60
-const JON_HIT_RETURN_MS = 90
+const IDLE_FRAME_MS = 300
+const MOVE_FRAME_MS = 100
 const JON_KO_IMPACT_MS = 70
 const JON_KO_COLLAPSE_MS = 330
 const JON_KO_TOTAL_MS = 400
@@ -54,31 +34,6 @@ const HIT_FLECK_OPACITY = 0.6
 const BACKGROUND_SNOW_COUNT = 12
 const NEAR_SNOW_COUNT = 6
 const HIT_FLECK_POOL_SIZE = 6
-// Measured source-pixel sole lines. Each texture uses the same scale and world baseline.
-const JON_FRAME_SOLE_Y: Record<string, number> = {
-  'jon-snow-guard': 1329,
-  'jon-idle-2': 1330,
-  'jon-idle-3': 1330,
-  'jon-idle-4': 1330,
-  'jon-move-1': 1316,
-  'jon-move-2': 1322,
-  'jon-move-3': 1322,
-  'jon-move-4': 1324,
-  'jon-move-5': 1316,
-  'jon-move-6': 1324,
-  'jon-attack-s-1': 1324,
-  'jon-attack-s-2': 1328,
-  'jon-attack-a-1': 1256,
-  'jon-attack-a-2': 1285,
-  'jon-attack-a-3': 1262,
-  'jon-attack-r-1': 1280,
-  'jon-attack-r-2': 1322,
-  'jon-attack-r-3': 1329,
-  'jon-hit-contact': 1348,
-  'jon-hit-recoil': 1348,
-  'jon-ko-collapse': 1326,
-  'jon-ko-hold': 1336,
-}
 const FACING_MARKER_SIZE = 12
 const PLAYER_MOVE_SPEED = 300
 const PLAYER_MAX_HEALTH = 100
@@ -96,9 +51,10 @@ const HUD_FILL_HEIGHT = HUD_FRAME_HEIGHT - HUD_FRAME_INSET * 2
 
 type Facing = 'left' | 'right'
 type Winner = 'PLAYER 1' | 'PLAYER 2'
-type JonVisualMode = 'idle' | 'move-forward' | 'move-retreat' | 'attack'
 
 interface Fighter extends AttackRuntime {
+  visualConfig: FighterVisualConfig
+  presentation: FighterVisualRuntime
   guardEligible: boolean
   guardIndicator: Phaser.GameObjects.Rectangle
   guardCueMs: number
@@ -172,10 +128,6 @@ export class CombatScene extends Phaser.Scene {
   private parentResizeObserver?: ResizeObserver
   private touchControls!: TouchControls
   private winner: Winner | null = null
-  private jonVisualMode: JonVisualMode = 'idle'
-  private jonVisualElapsed = 0
-  private jonHitElapsed: number | null = null
-  private jonKoElapsed: number | null = null
   private impactCue!: Phaser.GameObjects.Graphics
   private impactCueElapsed = IMPACT_CUE_MS
   private jonTrail!: Phaser.GameObjects.Graphics
@@ -205,10 +157,6 @@ export class CombatScene extends Phaser.Scene {
   create(): void {
     // Scene restarts reuse this class instance; new fighters reset their own state.
     this.winner = null
-    this.jonVisualMode = 'idle'
-    this.jonVisualElapsed = 0
-    this.jonHitElapsed = null
-    this.jonKoElapsed = null
     this.impactCueElapsed = IMPACT_CUE_MS
     this.jonTrailElapsed = JON_TRAIL_MS
     this.snowflakes = []
@@ -224,8 +172,8 @@ export class CombatScene extends Phaser.Scene {
     this.addSnowfall()
 
     const [playerOneSpawnX, playerTwoSpawnX] = getFighterWorldSpawns()
-    this.playerOne = this.addFighter(playerOneSpawnX, 0x4cc9f0, 'jon-snow-guard')
-    this.playerTwo = this.addFighter(playerTwoSpawnX, 0xf72585)
+    this.playerOne = this.addFighter(playerOneSpawnX, JON_VISUALS)
+    this.playerTwo = this.addFighter(playerTwoSpawnX, LYRA_VISUALS)
     this.updateFacing()
     this.cameras.main
       .setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
@@ -254,10 +202,10 @@ export class CombatScene extends Phaser.Scene {
       })
     }
 
-    this.playerOneHealthBar = this.addHealthBar(HUD_PANEL_MARGIN, 'JON SNOW', false)
+    this.playerOneHealthBar = this.addHealthBar(HUD_PANEL_MARGIN, this.playerOne.visualConfig.name, false)
     this.playerTwoHealthBar = this.addHealthBar(
       this.scale.width - HUD_PANEL_MARGIN - HUD_PANEL_WIDTH,
-      'PLAYER 2',
+      this.playerTwo.visualConfig.name,
       true,
     )
     this.shortLandscapeHud = false
@@ -359,12 +307,14 @@ export class CombatScene extends Phaser.Scene {
       }
       // Gameplay stays locked; existing airborne trajectories still settle naturally.
       this.settleFightersVertically(delta)
-      this.updateJonVisual(delta, 0)
+      this.updateFighterVisual(this.playerOne, delta, 0)
+      this.updateFighterVisual(this.playerTwo, delta, 0)
       this.updateVfx(delta)
       return
     }
 
     const previousPlayerOneX = this.playerOne.container.x
+    const previousPlayerTwoX = this.playerTwo.container.x
     // Snapshot BEFORE reaction expiry; only held blockstun permits re-guard.
     for (const [fighter, input] of [[this.playerOne, playerOneInput], [this.playerTwo, playerTwoInput]] as const) {
       fighter.guardCueMs = Math.max(0, fighter.guardCueMs - delta)
@@ -399,7 +349,8 @@ export class CombatScene extends Phaser.Scene {
     this.launchContinuation(this.playerOne)
     this.launchContinuation(this.playerTwo)
     this.updateGuardPresentation(0)
-    this.updateJonVisual(delta, playerOneStunned ? 0 : this.playerOne.container.x - previousPlayerOneX)
+    this.updateFighterVisual(this.playerOne, delta, playerOneStunned ? 0 : this.playerOne.container.x - previousPlayerOneX)
+    this.updateFighterVisual(this.playerTwo, delta, playerTwoStunned ? 0 : this.playerTwo.container.x - previousPlayerTwoX)
     this.updateVfx(delta)
   }
 
@@ -518,80 +469,86 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private updateJonVisual(delta: number, movedX: number): void {
-    const visual = this.playerOne.visual
+  private updateFighterVisual(fighter: Fighter, delta: number, movedX: number): void {
+    const visual = fighter.visual
     if (!visual) return
+    const config = fighter.visualConfig
+    const runtime = fighter.presentation
+    // Newly-created Lyra feedback gets a first frame; no historical frame time.
+    // Jon retains his approved existing contact-update playback behavior.
+    const reactionDelta = runtime.freshReaction && !config.consumeContactDelta ? 0 : delta
+    runtime.freshReaction = false
 
-    if (this.jonKoElapsed !== null) {
-      this.jonKoElapsed = Math.min(this.jonKoElapsed + delta, JON_KO_TOTAL_MS)
-      const frameKey = this.jonKoElapsed < JON_KO_IMPACT_MS
-        ? 'jon-hit-recoil'
-        : this.jonKoElapsed < JON_KO_COLLAPSE_MS
-          ? 'jon-ko-collapse'
-          : 'jon-ko-hold'
-      this.setJonFrame(visual, frameKey)
+    if (runtime.koElapsed !== null) {
+      runtime.koElapsed = Math.min(runtime.koElapsed + reactionDelta, JON_KO_TOTAL_MS)
+      const frameKey = runtime.koElapsed < JON_KO_IMPACT_MS
+        ? config.ko[0]
+        : runtime.koElapsed < JON_KO_COLLAPSE_MS ? config.ko[1] : config.ko[2]
+      this.setFighterFrame(fighter, frameKey)
       return
     }
 
     if (this.winner) {
-      this.setJonFrame(visual, 'jon-snow-guard')
+      this.setFighterFrame(fighter, config.guard)
       return
     }
 
-    let mode: JonVisualMode
+    let mode: FighterVisualRuntime['mode']
     let frameKey: string
-    if (this.playerOne.attackState !== 'idle') {
+    if (fighter.attackState !== 'idle') {
       mode = 'attack'
-      frameKey = this.getJonAttackFrame(this.playerOne)
-    } else if (this.playerOne.guardEligible || this.playerOne.reaction.reactionState !== 'neutral' || this.playerOne.vertical.movementState !== 'grounded') {
+      frameKey = this.getAttackFrame(fighter)
+    } else if (fighter.guardEligible || fighter.reaction.reactionState !== 'neutral' || fighter.vertical.movementState !== 'grounded') {
       // Hold guard while airborne/stunned; knockback must not select walking frames.
       mode = 'idle'
-      frameKey = 'jon-snow-guard'
-      this.jonVisualElapsed = 0
+      frameKey = fighter.vertical.movementState === 'rising' ? config.rising
+        : fighter.vertical.movementState === 'falling' ? config.falling : config.guard
+      runtime.elapsed = 0
     } else {
       mode = 'idle'
       if (movedX !== 0) {
-        const movingForward = movedX * (this.playerOne.facing === 'right' ? 1 : -1) > 0
+        const movingForward = movedX * (fighter.facing === 'right' ? 1 : -1) > 0
         mode = movingForward ? 'move-forward' : 'move-retreat'
       }
 
       // Gameplay displacement, not key state, selects locomotion at boundaries.
-      this.jonVisualElapsed = mode === this.jonVisualMode ? this.jonVisualElapsed + delta : 0
+      runtime.elapsed = mode === runtime.mode ? runtime.elapsed + delta : 0
       if (mode === 'idle') {
-        const loopElapsed = this.jonVisualElapsed % (JON_IDLE_FRAMES.length * JON_IDLE_FRAME_MS)
-        const index = Math.floor(loopElapsed / JON_IDLE_FRAME_MS)
-        frameKey = JON_IDLE_FRAMES[index]
+        const index = Math.floor((runtime.elapsed % (config.idle.length * IDLE_FRAME_MS)) / IDLE_FRAME_MS)
+        frameKey = config.idle[index]
       } else {
-        const loopElapsed = this.jonVisualElapsed % (JON_MOVE_FRAMES.length * JON_MOVE_FRAME_MS)
-        const index = Math.floor(loopElapsed / JON_MOVE_FRAME_MS)
-        frameKey = JON_MOVE_FRAMES[mode === 'move-retreat' ? JON_MOVE_FRAMES.length - 1 - index : index]
+        const index = Math.floor((runtime.elapsed % (config.movement.length * MOVE_FRAME_MS)) / MOVE_FRAME_MS)
+        frameKey = config.movement[mode === 'move-retreat' ? config.movement.length - 1 - index : index]
       }
     }
 
-    if (this.jonHitElapsed !== null) {
-      this.jonHitElapsed += delta
-      if (this.jonHitElapsed < JON_HIT_CONTACT_MS) {
-        frameKey = 'jon-hit-contact'
-      } else if (this.jonHitElapsed < JON_HIT_CONTACT_MS + JON_HIT_RECOIL_MS) {
-        frameKey = 'jon-hit-recoil'
-      } else if (this.jonHitElapsed >= JON_HIT_CONTACT_MS + JON_HIT_RECOIL_MS + JON_HIT_RETURN_MS) {
-        this.jonHitElapsed = null
+    if (runtime.hitElapsed !== null) {
+      runtime.hitElapsed += reactionDelta
+      const duration = config.fixedHitDurationMs ?? runtime.hitDurationMs
+      const contactEnd = duration * config.hitWeights[0]
+      const recoilEnd = contactEnd + duration * config.hitWeights[1]
+      if (runtime.hitElapsed < contactEnd) {
+        frameKey = config.hit[0]
+      } else if (runtime.hitElapsed < recoilEnd) {
+        frameKey = config.hit[1]
+      } else if (runtime.hitElapsed >= duration) {
+        runtime.hitElapsed = null
       }
       // Return to the *current* gameplay-selected pose; attacks are never rewound.
     }
-    this.setJonFrame(visual, frameKey)
-    this.jonVisualMode = mode
+    this.setFighterFrame(fighter, frameKey)
+    runtime.mode = mode
   }
 
-  private setJonFrame(visual: Phaser.GameObjects.Image, frameKey: string): void {
+  private setFighterFrame(fighter: Fighter, frameKey: string): void {
+    const visual = fighter.visual
+    if (!visual) return
     if (visual.texture.key === frameKey) return
 
-    const soleY = JON_FRAME_SOLE_Y[frameKey]
-    if (soleY === undefined) throw new Error(`Missing Jon Snow frame baseline: ${frameKey}`)
+    const originY = fighter.visualConfig.origins[frameKey]
+    if (originY === undefined) throw new Error(`Missing fighter frame baseline: ${frameKey}`)
     visual.setTexture(frameKey)
-    // The original move-3 source was one pixel shorter than the other frames.
-    const sourceHeight = frameKey === 'jon-move-3' ? 1373 : JON_SNOW_TEXTURE_HEIGHT
-    visual.setOrigin(0.5, soleY / sourceHeight)
+    visual.setOrigin(0.5, originY)
   }
 
   private addArena(): void {
@@ -712,8 +669,9 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private getJonAttackFrame(fighter: Fighter): string {
-    if (!fighter.currentAttack || fighter.attackState === 'idle') return 'jon-snow-guard'
+  private getAttackFrame(fighter: Fighter): string {
+    const config = fighter.visualConfig
+    if (!fighter.currentAttack || fighter.attackState === 'idle') return config.guard
     const elapsed = getAttackPresentationElapsed(
       ATTACK_DEFINITIONS[fighter.currentAttack], fighter.attackState,
       fighter.attackState === 'startup'
@@ -721,12 +679,12 @@ export class CombatScene extends Phaser.Scene {
         : fighter.attackPhaseElapsed,
     )
     if (fighter.attackState === 'startup') {
-      return elapsed < 90 ? 'jon-attack-s-1' : 'jon-attack-s-2'
+      return phaseFrame(config.startup, elapsed / ATTACK_DEFINITIONS.light.startupMs)
     }
     if (fighter.attackState === 'active') {
-      return elapsed < 60 ? 'jon-attack-a-1' : elapsed < 160 ? 'jon-attack-a-2' : 'jon-attack-a-3'
+      return phaseFrame(config.active, elapsed / ATTACK_DEFINITIONS.light.activeMs, config.activeWeights)
     }
-    return elapsed < 100 ? 'jon-attack-r-1' : elapsed < 200 ? 'jon-attack-r-2' : 'jon-attack-r-3'
+    return phaseFrame(config.recovery, elapsed / ATTACK_DEFINITIONS.light.recoveryMs)
   }
 
   private settleFightersVertically(delta: number): void {
@@ -840,9 +798,9 @@ export class CombatScene extends Phaser.Scene {
       this.jonSwingPlayed = true // Retire this attack's cue; only a new attack makes it eligible again.
       this.jonTrailElapsed = JON_TRAIL_MS
       this.jonTrail.setVisible(false)
-      this.jonVisualMode = 'idle'
-      this.jonVisualElapsed = 0
     }
+    fighter.presentation.mode = 'idle'
+    fighter.presentation.elapsed = 0
   }
 
   private clearCombatState(): void {
@@ -891,7 +849,7 @@ export class CombatScene extends Phaser.Scene {
             fighter.combo.damageConfirmed = false
             fighter.combo.bufferedAttack = null
           } else {
-            this.applyDamage(defender, definition.damage)
+            this.applyDamage(defender, definition.damage, definition.hitstunMs)
             if (!this.winner) {
               fighter.combo.damageConfirmed = true
               this.cancelAttack(defender)
@@ -945,20 +903,20 @@ export class CombatScene extends Phaser.Scene {
     return true
   }
 
-  private applyDamage(defender: Fighter, damage: number): void {
+  private applyDamage(defender: Fighter, damage: number, hitstunMs = ATTACK_DEFINITIONS.light.hitstunMs): void {
     if (this.winner) return
 
     defender.health = Math.max(0, defender.health - damage)
     this.updateHealthBars()
     this.playConfirmedHitAudio(defender.health)
     this.showImpactCue(defender)
-    if (defender === this.playerOne) {
-      if (defender.health === 0) {
-        this.jonHitElapsed = null
-        this.jonKoElapsed = 0
-      } else {
-        this.jonHitElapsed = 0
-      }
+    defender.presentation.freshReaction = true
+    if (defender.health === 0) {
+      defender.presentation.hitElapsed = null
+      defender.presentation.koElapsed = 0
+    } else {
+      defender.presentation.hitElapsed = 0
+      defender.presentation.hitDurationMs = hitstunMs
     }
     const playerLabel = defender === this.playerOne ? 'Player 1' : 'Player 2'
     console.log(`Hit! ${playerLabel} HP: ${defender.health}`)
@@ -976,10 +934,11 @@ export class CombatScene extends Phaser.Scene {
       false,
       true,
     )
-    if (winner === 'PLAYER 1') this.jonHitElapsed = null
+    const winningFighter = winner === 'PLAYER 1' ? this.playerOne : this.playerTwo
+    winningFighter.presentation.hitElapsed = null
     this.clearCombatState()
     this.winnerText = this.add
-      .text(VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT / 2, winner === 'PLAYER 1' ? 'JON SNOW WINS' : 'PLAYER 2 WINS', {
+      .text(VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT / 2, `${winningFighter.visualConfig.name} WINS`, {
         fontFamily: 'Arial',
         fontSize: '56px',
         color: '#ffffff',
@@ -1132,22 +1091,14 @@ export class CombatScene extends Phaser.Scene {
     fill.setFillStyle(health <= 20 ? 0xa36f5b : health <= 50 ? 0xad8969 : 0xbe9d77)
   }
 
-  private addFighter(x: number, color: number, textureKey?: string): Fighter {
+  private addFighter(x: number, config: FighterVisualConfig): Fighter {
     const vertical = createVerticalMovement()
     const fighterY = vertical.footY - FIGHTER_HEIGHT / 2
 
     // Scale the illustration independently; its sole origin stays at the gameplay foot.
     // Only the image flips: container position and collision geometry stay unchanged.
-    const visual = textureKey
-      ? this.add
-          .image(0, FIGHTER_HEIGHT / 2, textureKey)
-          .setOrigin(0.5, JON_SNOW_FOOT_Y / JON_SNOW_TEXTURE_HEIGHT)
-          .setScale(JON_IMAGE_SCALE)
-      : undefined
-    const body = visual ??
-      this.add
-        .rectangle(0, 0, FIGHTER_WIDTH, FIGHTER_HEIGHT, color)
-        .setStrokeStyle(4, 0xffffff)
+    const visual = this.add.image(0, FIGHTER_HEIGHT / 2, config.guard)
+      .setOrigin(0.5, config.origins[config.guard]).setScale(config.scale)
 
     // Temporary marker makes the fighter's gameplay-facing state visible.
     const facingMarker = this.add
@@ -1175,7 +1126,9 @@ export class CombatScene extends Phaser.Scene {
 
     const guardIndicator = this.add.rectangle(FIGHTER_WIDTH / 2 + 6, 0, 6, 58, 0xcbdce4).setVisible(false)
     return {
-      container: this.add.container(x, fighterY, [body, facingMarker, attackArea, guardIndicator]),
+      container: this.add.container(x, fighterY, [visual, facingMarker, attackArea, guardIndicator]),
+      visualConfig: config,
+      presentation: createVisualRuntime(),
       guardEligible: false,
       guardIndicator,
       guardCueMs: 0,

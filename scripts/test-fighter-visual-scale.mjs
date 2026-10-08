@@ -5,7 +5,7 @@ import { GROUND_TOP, GRAVITY, JUMP_VELOCITY, createVerticalMovement, advanceVert
 
 // Reuse the existing production-scene harness. Importing it also runs its 45
 // combat regressions; the four tests below cover presentation only.
-test('desktop Jon renders at 240 px reference head-to-foot height without scaling the body or P2', () => {
+test('desktop Jon stays at 240 px while Lyra uses her independent 190 px presentation', () => {
   const scene = makeScene()
   const jon = scene.playerOne
   const visual = jon.visual
@@ -14,10 +14,17 @@ test('desktop Jon renders at 240 px reference head-to-foot height without scalin
   assert.equal(visual.y, 70, 'unchanged local gameplay foot offset')
   assert.equal(jon.container.y + visual.y, GROUND_TOP)
   assert.equal(jon.vertical.footY, 560)
-  const placeholder = scene.playerTwo.container.children[0]
-  assert.equal(placeholder.width, 72)
-  assert.equal(placeholder.height, 140)
-  assert.equal(scene.playerTwo.visual, undefined)
+  const lyra = scene.playerTwo.visual
+  assert.equal(lyra.scaleY, 190 / 259)
+  assert.equal(lyra.originY, 448 / 512)
+  assert.equal(scene.playerTwo.container.y + lyra.y, GROUND_TOP)
+  scene.tryStartAttack(jon, 'light')
+  jon.attackState = 'active'
+  scene.playerTwo.container.x = jon.container.x + 172.001
+  assert.equal(scene.checkAttackHit(jon, scene.playerTwo), false)
+  scene.playerTwo.container.x -= 0.001
+  assert.equal(scene.checkAttackHit(jon, scene.playerTwo), true, 'unchanged 36 px half-width')
+  scene.cancelAttack(jon)
   assert.equal(jon.attackArea.width, 100)
   scene.tryStartAttack(jon, 'heavy')
   assert.equal(jon.attackArea.width, 125)
@@ -36,7 +43,7 @@ test('landscape FIT keeps Jon at one third of usable canvas height without chang
     assert.ok(cssHeight > 180 * fitScale, 'mobile presence increases versus the 180 px experiment')
     assert.equal(scene.playerOne.visual.scaleY, 720 / 1201, 'FIT does not rescale the gameplay container')
     assert.equal(scene.playerOne.visual.y, 70)
-    assert.equal(scene.playerTwo.container.children[0].height, 140)
+    assert.equal(scene.playerTwo.container.y, GROUND_TOP - 140 / 2)
   }
 })
 
@@ -55,7 +62,7 @@ test('all 22 existing Jon poses retain one uniform scale and their measured sole
     'jon-ko-collapse': 1326, 'jon-ko-hold': 1336,
   }
   for (const [key, sole] of Object.entries(soles)) {
-    scene.setJonFrame(visual, key)
+    scene.setFighterFrame(scene.playerOne, key)
     const height = key === 'jon-move-3' ? 1373 : 1374
     assert.equal(visual.originX, 0.5)
     assert.equal(visual.originY, sole / height)

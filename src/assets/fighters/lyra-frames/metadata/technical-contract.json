@@ -1,0 +1,16 @@
+{
+  "story":"US-28",
+  "character":"Lyra",
+  "purpose":"External sprite-art delivery; integration not authorized",
+  "png":{"width":512,"height":512,"channels":4,"bitDepth":8,"colorType":6,"background":"transparent","alphaTrimming":false},
+  "registration":{"root":[256,448],"origin":[0.5,0.875],"facing":"right","sharedDisplayScale":0.7335907335907336,"scaleDerivation":"190/259","approvedGuardCrownY":189,"approvedGuardSoleY":448},
+  "standingComparison":{"LyraLogicalHeight":190,"JonLogicalHeight":240,"LyraToJonHeightRatio":0.7916666666666666,"commonGroundBaseline":true},
+  "exportPolicy":"Native camera magnification is calibrated offline by uniform whole-image resampling and translation; never runtime per-frame scaling, body-part stretching, blade stretching, or alpha-bounds resizing.",
+  "groundPolicy":"Grounded sole/body contact at canonical y448; low-alpha antialias fringe may extend below. KO foreground handguard may extend to y456 without clipping. Ground is a registration line, not an alpha clipping boundary.",
+  "airbornePolicy":"Virtual lowest-boot root remains registered to y448. Existing physics determines world altitude. Review sheets raise airborne world roots about36logical pixels for demonstration only; never bake that lift into sprites or add it to jump physics.",
+  "unchangedGameplay":{"hurtbox":[72,140],"attackRootEndpointsFromApprovedReview":[136,161],"attackVerticalBandAboveGround":[35,105],"movementSpeedChanged":false,"damageChanged":false,"timingChanged":false,"reachChanged":false,"collisionsChanged":false},
+  "runtimeSamplingReview":"Retain alpha-aware rendering and assess the fine steel point on light/dark backgrounds and device pixel ratios. Do not introduce trimming, filtered-edge halos, or inconsistent frame origins.",
+  "phasePolicy":"Light and Heavy share all initial attack textures; bind artwork to existing authoritative state/phase timers. Block uses Guard; no landing or victory textures.",
+  "memory":{"RGBA8BytesPerTexture":1048576,"inventoryCount":24,"decodedBytes":25165824,"decodedMiB":24,"fullMipChainApproxMiB":32,"excludes":"previews, duplicate GPU copies, atlasing/padding, driver overhead and native source art"},
+  "approvalGate":"Planner reviews assets/risks and separately authorizes Developer integration. Designer does not modify game files."
+}
