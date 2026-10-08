@@ -1,0 +1,29 @@
+{
+  "status": "24_TEXTURE_DELIVERY_COMPLETE_PLANNER_REVIEW_PENDING",
+  "filenameRule": "textures/<textureKey>.png",
+  "canvas": [512,512],
+  "rgbaBitDepth": 8,
+  "root": [256,448],
+  "origin": [0.5,0.875],
+  "presentationScale": 0.7335907335907336,
+  "standingLogicalHeight": 190,
+  "facing": "right",
+  "alphaTrimming": false,
+  "animations": {
+    "guard": {"frames":["lyra-guard"],"hold":true},
+    "block": {"frames":["lyra-guard"],"hold":true,"reuses":"guard"},
+    "idle": {"frames":["lyra-guard","lyra-idle-2","lyra-idle-3","lyra-idle-4","lyra-idle-3","lyra-idle-2"],"loop":true},
+    "movement": {"frames":["lyra-move-1","lyra-move-2","lyra-move-3","lyra-move-4","lyra-move-5","lyra-move-6"],"loop":true},
+    "attackStartup": {"frames":["lyra-attack-s-1","lyra-attack-s-2"],"phaseWeights":[0.5,0.5]},
+    "attackActive": {"frames":["lyra-attack-a-1","lyra-attack-a-2","lyra-attack-a-3"],"phaseWeights":[0.3333333333333333,0.3333333333333333,0.3333333333333333]},
+    "attackRecovery": {"frames":["lyra-attack-r-1","lyra-attack-r-2","lyra-attack-r-3"],"phaseWeights":[0.3333333333333333,0.3333333333333333,0.3333333333333333]},
+    "rising": {"frames":["lyra-rising"],"hold":true},
+    "falling": {"frames":["lyra-falling"],"hold":true},
+    "hit": {"frames":["lyra-hit-contact","lyra-hit-recoil"],"phaseWeights":[0.5,0.5]},
+    "ko": {"frames":["lyra-ko-collapse","lyra-ko-hold"],"holdLastFrame":true}
+  },
+  "gameplayTimingPolicy": "Reuse all existing authoritative phase durations, hit windows and gameplay clocks. Phase weights distribute artwork within an unchanged phase. Offline review animation delays are not gameplay settings.",
+  "lightHeavyPolicy": "Shared startup/active/recovery artwork. Do not stretch sword or change reach to distinguish Light and Heavy.",
+  "airbornePolicy": "Root stays (256,448). Apply existing physics world position only. No baked review-sheet altitude offset.",
+  "noExtraTextures": ["block","landing","victory"]
+}

@@ -10,6 +10,7 @@ import * as world from '../src/game/world/combatWorld.ts'
 import * as reactions from '../src/game/combat/hitReaction.ts'
 import * as combos from '../src/game/combat/comboDefinitions.ts'
 import * as blocks from '../src/game/combat/blockDefinitions.ts'
+import * as visuals from '../src/game/presentation/fighterVisuals.ts'
 
 const { ATTACK_DEFINITIONS: definitions, createAttackRuntime, selectAttack } = attacks
 const require = createRequire(import.meta.url)
@@ -64,6 +65,7 @@ const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../combat/hitReaction': reactions,
   '../combat/comboDefinitions': combos,
   '../combat/blockDefinitions': blocks,
+  '../presentation/fighterVisuals': visuals,
   '../controls/TouchControls': touchModule,
 })
 
@@ -84,6 +86,7 @@ const display = (x = 0, y = 0, width = 0, height = 0) => {
   object.setTexture = key => { object.texture.key = key; return object }
   object.setScale = (x, y = x) => { object.scaleX = x; object.scaleY = y; return object }
   object.setOrigin = (x, y = x) => { object.originX = x; object.originY = y; return object }
+  object.setFlipX = flipX => { object.flipX = flipX; return object }
   return object
 }
 
@@ -303,9 +306,9 @@ for (const id of ['light', 'heavy']) {
     const scene = makeScene()
     start(scene, id)
     const fighter = scene.playerOne
-    assert.equal(scene.getJonAttackFrame(fighter), 'jon-attack-s-1')
+    assert.equal(scene.getAttackFrame(fighter), 'jon-attack-s-1')
     fighter.attackPhaseElapsed = definitions[id].startupMs / 2
-    assert.equal(scene.getJonAttackFrame(fighter), 'jon-attack-s-2')
+    assert.equal(scene.getAttackFrame(fighter), 'jon-attack-s-2')
     fighter.attackPhaseElapsed = 0
     scene.sound.locked = true
     scene.advanceAttack(fighter, scene.playerTwo, definitions[id].swingCueMs - 1)
@@ -412,7 +415,7 @@ test('Heavy lethal hit clamps health, preserves P2 victory, KO replacement and H
   scene.advanceAttack(scene.playerTwo, scene.playerOne, definitions.heavy.startupMs)
   assert.equal(scene.playerOne.health, 0)
   assert.equal(scene.playerOneHealthBar.fill.visible, false)
-  assert.equal(scene.winnerText.text, 'PLAYER 2 WINS')
+  assert.equal(scene.winnerText.text, 'LYRA WINS')
   assert.equal(scene.koSound.plays, 1)
   assert.equal(scene.hitSounds.reduce((sum, sound) => sum + sound.plays, 0), 0)
 })
@@ -554,7 +557,7 @@ test('Heavy active/recovery poses scale to definition durations while Light pose
       const duration = phase === 'active' ? 'activeMs' : 'recoveryMs'
       fighter.attackState = phase
       fighter.attackPhaseElapsed = boundary * definitions[id][duration] / definitions.light[duration]
-      assert.equal(scene.getJonAttackFrame(fighter), frame)
+      assert.equal(scene.getAttackFrame(fighter), frame)
     }
   }
 })
@@ -598,8 +601,8 @@ test('production presentation preserves distinct Light/Heavy timelines instead o
     for (const scene of [light, heavy]) scene.update(0, elapsed - previous)
     assert.equal(light.playerOne.attackState, lightState)
     assert.equal(heavy.playerOne.attackState, heavyState)
-    assert.equal(light.getJonAttackFrame(light.playerOne), lightFrame)
-    assert.equal(heavy.getJonAttackFrame(heavy.playerOne), heavyFrame)
+    assert.equal(light.getAttackFrame(light.playerOne), lightFrame)
+    assert.equal(heavy.getAttackFrame(heavy.playerOne), heavyFrame)
     previous = elapsed
   }
 })

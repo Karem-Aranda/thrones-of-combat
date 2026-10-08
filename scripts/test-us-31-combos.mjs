@@ -252,9 +252,9 @@ test('US-31 continuation presentation maps startup fractions and keeps scale/fee
     s.bufferContinuation(a, id); s.launchContinuation(a)
     assert.equal(s.jonTrail.visible, false)
     assert.equal(s.jonSwingPlayed, false)
-    assert.equal(s.getJonAttackFrame(a), 'jon-attack-s-1')
+    assert.equal(s.getAttackFrame(a), 'jon-attack-s-1')
     a.attackPhaseElapsed = COMBO_CONTINUATIONS[id] / 2
-    assert.equal(s.getJonAttackFrame(a), 'jon-attack-s-2')
+    assert.equal(s.getAttackFrame(a), 'jon-attack-s-2')
     s.swingSound.isPlaying = false
     s.advanceAttack(a, s.playerTwo, definitions[id].swingCueMs - a.attackPhaseElapsed - 1)
     assert.equal(s.jonSwingPlayed, false)

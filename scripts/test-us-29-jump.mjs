@@ -8,6 +8,7 @@ import ts from 'typescript'
 import * as hitReaction from '../src/game/combat/hitReaction.ts'
 import * as combos from '../src/game/combat/comboDefinitions.ts'
 import * as blocks from '../src/game/combat/blockDefinitions.ts'
+import * as visuals from '../src/game/presentation/fighterVisuals.ts'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
 import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
 import {
@@ -178,6 +179,7 @@ runInNewContext(compiledScene, {
     if (name === '../combat/hitReaction') return hitReaction
     if (name === '../combat/comboDefinitions') return combos
     if (name === '../combat/blockDefinitions') return blocks
+    if (name === '../presentation/fighterVisuals') return visuals
     throw new Error(`Unexpected scene dependency: ${name}`)
   },
   window: { matchMedia: () => ({ matches: false }) },
@@ -223,7 +225,7 @@ const makeCompletedScene = (winner = 'PLAYER 1') => {
   scene.scene = { restart: () => { presentation.restarts += 1 } }
   scene.startAmbienceIfUnlocked = () => {}
   scene.updateResponsiveHud = () => {}
-  scene.updateJonVisual = () => { presentation.frames += 1 }
+  scene.updateFighterVisual = () => { presentation.frames += 1 }
   scene.updateVfx = () => {}
   for (const method of ['moveFighters', 'updateFacing', 'tryStartAttack', 'advanceAttack', 'applyDamage']) {
     scene[method] = () => assert.fail(`Completed match must not call ${method}`)

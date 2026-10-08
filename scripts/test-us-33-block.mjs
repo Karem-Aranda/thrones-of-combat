@@ -67,7 +67,7 @@ for (const p of ['playerOne', 'playerTwo']) {
       assert.equal(a.reaction.reactionState, 'neutral')
       assert.equal(a.attackState, 'active')
       assert.equal(d.guardIndicator.visible, true)
-      assert.equal(s.jonHitElapsed, null); assert.equal(s.jonKoElapsed, null)
+      assert.equal(s.playerOne.presentation.hitElapsed, null); assert.equal(s.playerOne.presentation.koElapsed, null)
       assert.equal(s.hitSounds.reduce((n, v) => n + v.plays, 0), 0)
       assert.equal(s.koSound.plays, 0)
       assert.equal(s.impactCue.visible, false, 'no ordinary confirmed-hit treatment')
