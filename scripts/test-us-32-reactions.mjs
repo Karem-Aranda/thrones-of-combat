@@ -163,13 +163,22 @@ for (const player of ['playerOne', 'playerTwo']) {
       assert.equal(defender.currentAttack, id)
     })
   }
-  test(`US-32 ${player}: touch holds survive stun while touch jump/attack edges are consumed`, () => {
+  test(`US-32 ${player}: mobile-P1 or keyboard-P2 holds survive stun while jump/attack edges are consumed`, () => {
     const scene = makeScene()
     const defender = confirm(scene, 'light', player)
     scene.touchControls.setPresentation(true, false, false)
-    const buttons = ['left', 'jump', 'light', 'heavy'].map(action =>
+    const buttons = ['jump', 'light', 'heavy'].map(action =>
       scene.touchControls.buttons.find(button => button.player === player && button.action === action))
-    for (let i = 0; i < buttons.length; i++) buttons[i].zone.emit('pointerdown', { id: i + 1 })
+    if (player === 'playerOne') {
+      scene.input.emit('pointerdown', { id: 1, x: 300, y: 300 })
+      scene.input.emit('pointermove', { id: 1, x: 270, y: 300 })
+      for (let i = 0; i < buttons.length; i++) buttons[i].zone.emit('pointerdown', { id: i + 2 })
+    } else {
+      scene.movementKeys.playerTwo.left.isDown = true
+      tap(scene.movementKeys.playerTwo.jump)
+      press(scene, 'playerTwo', 'light')
+      press(scene, 'playerTwo', 'heavy')
+    }
     const before = defender.container.x
     // readFighterInput is the production keyboard/touch merger; keep the simulated
     // touch presentation stable while testing its intents through production movement.
@@ -184,7 +193,8 @@ for (const player of ['playerOne', 'playerTwo']) {
     assert.equal(recovered.jumpPressed, false)
     assert.equal(recovered.lightPressed, false)
     assert.equal(recovered.heavyPressed, false)
-    assert.equal(buttons[0].pointers.size, 1)
+    if (player === 'playerOne') assert.equal(scene.touchControls.joystickPointerId, 1)
+    else assert.equal(scene.movementKeys.playerTwo.left.isDown, true)
     scene.moveFighters(player === 'playerOne' ? recovered : empty, player === 'playerTwo' ? recovered : empty, 16)
     near(defender.container.x - before, 45 - 4.8)
   })
