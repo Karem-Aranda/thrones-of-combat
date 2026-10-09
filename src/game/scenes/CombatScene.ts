@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { findAttackContact, type ContactMotion, type AttackContact } from '../combat/attackContact'
 import { JON_VISUALS, LYRA_VISUALS, createVisualRuntime, phaseFrame, type FighterVisualConfig, type FighterVisualRuntime } from '../presentation/fighterVisuals'
 import { createBlockReaction, guardEligible, guardFacesContact } from '../combat/blockDefinitions'
 import { COMBO_CONTINUATIONS, createComboRuntime, canContinue, type ComboRuntime } from '../combat/comboDefinitions'
@@ -12,7 +13,7 @@ import {
   VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT,
   getFighterWorldSpawns, getAdaptiveViewportWidth, moveFightersWithinWorld,
   getCombatCameraTarget, getCombatCameraScroll,
-  GROUND_TOP, createVerticalMovement, advanceVerticalMovement, type VerticalMovement,
+  GROUND_TOP, GRAVITY, createVerticalMovement, advanceVerticalMovement, type VerticalMovement,
 } from '../world/combatWorld'
 
 // The approved cropped courtyard has a 20-pixel transparent strip above the paving.
@@ -329,6 +330,10 @@ export class CombatScene extends Phaser.Scene {
       ? selectAttack(playerOneInput.lightPressed, playerOneInput.heavyPressed) : null
     const playerTwoAttack = !playerTwoStunned && !this.playerTwo.guardEligible && this.playerTwo.vertical.movementState === 'grounded'
       ? selectAttack(playerTwoInput.lightPressed, playerTwoInput.heavyPressed) : null
+    const movement = new Map<Fighter, ContactMotion>([
+      [this.playerOne, this.contactMotion(this.playerOne, playerOneInput)],
+      [this.playerTwo, this.contactMotion(this.playerTwo, playerTwoInput)],
+    ])
     this.moveFighters(playerOneInput, playerTwoInput, delta)
     this.cameras.main.setScroll(getCombatCameraScroll(
       this.cameras.main.scrollX, this.playerOne.container.x, this.playerTwo.container.x,
@@ -341,8 +346,8 @@ export class CombatScene extends Phaser.Scene {
     this.tryStartAttack(this.playerTwo, playerTwoAttack)
     this.bufferContinuation(this.playerOne, playerOneAttack)
     this.bufferContinuation(this.playerTwo, playerTwoAttack)
-    this.advanceAttack(this.playerOne, this.playerTwo, delta)
-    this.advanceAttack(this.playerTwo, this.playerOne, delta)
+    this.advanceAttack(this.playerOne, this.playerTwo, delta, movement)
+    this.advanceAttack(this.playerTwo, this.playerOne, delta, movement)
     if (!jonWasActive && this.playerOne.attackState === 'active') this.jonTrailElapsed = 0
     // Launch after both resolutions: none of this update's elapsed time belongs
     // to a new continuation, and a P1 hit can retire P2's unresolved buffer.
@@ -719,6 +724,21 @@ export class CombatScene extends Phaser.Scene {
     this.playerTwo.reaction = twoReaction.reaction
   }
 
+  private contactMotion(fighter: Fighter, input: FighterInput): ContactMotion {
+    const stunned = fighter.reaction.reactionState !== 'neutral'
+    const vertical = advanceVerticalMovement(fighter.vertical,
+      input.jumpPressed && !fighter.guardEligible && fighter.attackState === 'idle' && !stunned, 0)
+    return {
+      x: fighter.container.x,
+      y: vertical.footY - FIGHTER_HEIGHT / 2,
+      velocityX: stunned ? fighter.reaction.knockbackVelocity : fighter.guardEligible ? 0
+        : (Number(input.rightHeld) - Number(input.leftHeld)) * PLAYER_MOVE_SPEED,
+      horizontalMs: stunned ? fighter.reaction.remainingMs : Infinity,
+      velocityY: vertical.velocityY,
+      airborne: vertical.movementState !== 'grounded',
+    }
+  }
+
   private updateFacing(): void {
     const playerOneX = this.playerOne.container.x
     const playerTwoX = this.playerTwo.container.x
@@ -811,10 +831,27 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private advanceAttack(fighter: Fighter, defender: Fighter, delta: number): void {
+  private advanceAttack(
+    fighter: Fighter, defender: Fighter, delta: number,
+    movement?: ReadonlyMap<Fighter, ContactMotion>,
+  ): void {
     if (this.winner || fighter.reaction.reactionState !== 'neutral' || fighter.attackState === 'idle' || !fighter.currentAttack) return
     const definition = ATTACK_DEFINITIONS[fighter.currentAttack]
     const startupMs = this.attackStartup(fighter)
+
+    // Active entry is inclusive; expiry is exclusive. Clip the movement path
+    // BEFORE carrying elapsed time, rather than testing the frame's final pose.
+    const activeStart = fighter.attackState === 'startup' ? startupMs - fighter.attackPhaseElapsed : 0
+    const activeEnd = fighter.attackState === 'startup'
+      ? activeStart + definition.activeMs : definition.activeMs - fighter.attackPhaseElapsed
+    const canContact = !fighter.attackHasHit && fighter.attackState !== 'recovery' && activeStart <= delta && activeEnd > 0
+    const contact = canContact && movement
+      ? findAttackContact(movement.get(fighter)!, movement.get(defender)!, activeStart,
+        Math.min(delta, activeEnd), delta < activeEnd,
+        { fighterWidth: FIGHTER_WIDTH, fighterHeight: FIGHTER_HEIGHT,
+          reach: definition.reach, attackHeight: definition.height,
+          worldWidth: WORLD_WIDTH, groundTop: GROUND_TOP, gravity: GRAVITY })
+      : null
 
     fighter.attackPhaseElapsed += delta
     // A shortened continuation can reach active before its unchanged swing cue.
@@ -837,13 +874,19 @@ export class CombatScene extends Phaser.Scene {
         fighter.attackState = 'active'
         fighter.attackArea.setVisible(true)
       } else if (fighter.attackState === 'active') {
-        const hit = this.checkAttackHit(fighter, defender)
+        const hit = canContact && this.checkAttackHit(fighter, defender, movement ? contact : undefined)
         if (hit) {
-          if (defender.guardEligible && defender.vertical.movementState === 'grounded' &&
+          const attackerX = contact?.attackerX ?? fighter.container.x
+          const defenderX = contact?.defenderX ?? defender.container.x
+          const attackerFacing = !contact || attackerX === defenderX ? fighter.facing : attackerX < defenderX ? 'right' : 'left'
+          const defenderFacing = !contact || attackerX === defenderX ? defender.facing : attackerX < defenderX ? 'left' : 'right'
+          const defenderGrounded = contact ? contact.defenderY === GROUND_TOP - FIGHTER_HEIGHT / 2
+            : defender.vertical.movementState === 'grounded'
+          if (defender.guardEligible && defenderGrounded &&
               defender.attackState === 'idle' && defender.reaction.reactionState !== 'hitstun' &&
-              guardFacesContact(fighter.container.x, defender.container.x, fighter.facing, defender.facing)) {
-            const direction = fighter.container.x === defender.container.x
-              ? (fighter.facing === 'right' ? 1 : -1) : defender.container.x > fighter.container.x ? 1 : -1
+              guardFacesContact(attackerX, defenderX, attackerFacing, defenderFacing)) {
+            const direction = attackerX === defenderX
+              ? (attackerFacing === 'right' ? 1 : -1) : defenderX > attackerX ? 1 : -1
             defender.reaction = createBlockReaction(fighter.currentAttack!, direction)
             defender.guardCueMs = 90
             fighter.combo.damageConfirmed = false
@@ -855,9 +898,9 @@ export class CombatScene extends Phaser.Scene {
               this.cancelAttack(defender)
               defender.guardEligible = false
               // Capture away-from-attacker direction once; equal centers use attack facing.
-              const direction = defender.container.x === fighter.container.x
-                ? (fighter.facing === 'right' ? 1 : -1)
-                : (defender.container.x > fighter.container.x ? 1 : -1)
+              const direction = defenderX === attackerX
+                ? (attackerFacing === 'right' ? 1 : -1)
+                : (defenderX > attackerX ? 1 : -1)
               defender.reaction = createHitReaction(definition, direction)
             }
           }
@@ -879,8 +922,13 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private checkAttackHit(attacker: Fighter, defender: Fighter): boolean {
+  private checkAttackHit(attacker: Fighter, defender: Fighter, contact?: AttackContact | null): boolean {
     if (this.winner || attacker.reaction.reactionState !== 'neutral' || attacker.attackState !== 'active' || attacker.attackHasHit || !attacker.currentAttack) return false
+    if (contact === null) return false
+    if (contact) {
+      attacker.attackHasHit = true
+      return true
+    }
     const definition = ATTACK_DEFINITIONS[attacker.currentAttack]
 
     // Use the facing-positioned visualization for identical world-space geometry.

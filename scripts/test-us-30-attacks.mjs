@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as attacks from '../src/game/combat/attackDefinitions.ts'
+import * as contact from '../src/game/combat/attackContact.ts'
 import * as world from '../src/game/world/combatWorld.ts'
 import * as reactions from '../src/game/combat/hitReaction.ts'
 import * as combos from '../src/game/combat/comboDefinitions.ts'
@@ -73,6 +74,7 @@ const loadClass = (path, dependencies) => {
 const touchModule = loadClass('../src/game/controls/TouchControls.ts', { '../world/combatWorld': world })
 const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../world/combatWorld': world, '../combat/attackDefinitions': attacks,
+  '../combat/attackContact': contact,
   '../combat/hitReaction': reactions,
   '../combat/comboDefinitions': combos,
   '../combat/blockDefinitions': blocks,
