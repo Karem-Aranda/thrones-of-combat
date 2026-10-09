@@ -45,7 +45,7 @@ const jonSoles: Record<string, number> = {
 export const JON_VISUALS: FighterVisualConfig = {
   // Existing 1/3-resampled PNGs use original-source sole measurements below.
   // (1329 - 128) / 3 source pixels × (720 / 1201) = 240 logical pixels.
-  name: 'JON SNOW', scale: 720 / 1201, guard: 'jon-snow-guard',
+  name: 'ALARIC DUSKBANE', scale: 720 / 1201, guard: 'jon-snow-guard',
   idle: ['jon-snow-guard', 'jon-idle-2', 'jon-idle-3', 'jon-idle-2', 'jon-snow-guard', 'jon-idle-4', 'jon-snow-guard'],
   movement: Array.from({ length: 6 }, (_, i) => `jon-move-${i + 1}`),
   startup: ['jon-attack-s-1', 'jon-attack-s-2'],
@@ -71,7 +71,7 @@ const lyraKeys = [
 export const LYRA_VISUALS: FighterVisualConfig = {
   // Approved 512×512 fixed registration: crown 189, sole 448, height 259.
   // Uniform scale and origin apply to every pose, never to collision geometry.
-  name: 'LYRA', scale: 190 / 259, guard: 'lyra-guard',
+  name: 'LYRA THORNVALE', scale: 190 / 259, guard: 'lyra-guard',
   idle: ['lyra-guard', 'lyra-idle-2', 'lyra-idle-3', 'lyra-idle-4', 'lyra-idle-3', 'lyra-idle-2'],
   movement: Array.from({ length: 6 }, (_, i) => `lyra-move-${i + 1}`),
   startup: ['lyra-attack-s-1', 'lyra-attack-s-2'],

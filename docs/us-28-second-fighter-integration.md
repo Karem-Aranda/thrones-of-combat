@@ -52,8 +52,10 @@ wording is superseded by the current explicit implementation authorization.
 - Lyra KO uses Collapse followed by Hold within the existing 400 ms presentation
   timeline (Hold from 330 ms), and continues after the match input lock. Both
   fighters get fresh presentation records through the existing scene restart.
-- HUD identity becomes **LYRA** and her result becomes **LYRA WINS**.
-  Jon's identity is unchanged. HUD layout, mirrored health mapping and internal
+- Current display identities (US-36) are **ALARIC DUSKBANE** for P1 and
+  **LYRA THORNVALE** for P2, with **ALARIC DUSKBANE WINS** and
+  **LYRA THORNVALE WINS** results. Historical Jon/Lyra artwork identifiers and
+  provenance remain unchanged. HUD layout, mirrored health mapping and internal
   `playerOne`/`playerTwo`/winner identifiers remain unchanged.
 
 ## Gameplay invariants
