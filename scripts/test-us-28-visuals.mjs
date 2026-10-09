@@ -234,7 +234,7 @@ test('US-28 facing/crossing flips only the illustration and equal X retains faci
 for (const player of ['playerOne', 'playerTwo']) {
   test(`US-28 ${player}: KO settles after match lock; winner identity and restart remain correct`, () => {
     const s = makeScene(), loser = s[player]
-    const winnerName = player === 'playerOne' ? 'LYRA' : 'JON SNOW'
+    const winnerName = player === 'playerOne' ? 'LYRA THORNVALE' : 'ALARIC DUSKBANE'
     s.applyDamage(loser, 100)
     assert.equal(s.winnerText.text, `${winnerName} WINS`)
     s.update(0, 16)

@@ -403,7 +403,7 @@ test('simultaneous lethal attacks preserve deterministic P1-first victory orderi
     assert.equal(scene.winner, 'PLAYER 1')
     assert.equal(scene.playerTwo.health, 0)
     assert.equal(scene.playerOne.health, definitions[id].damage)
-    assert.equal(scene.winnerText.text, 'JON SNOW WINS')
+    assert.equal(scene.winnerText.text, 'ALARIC DUSKBANE WINS')
   }
 })
 
@@ -415,7 +415,7 @@ test('Heavy lethal hit clamps health, preserves P2 victory, KO replacement and H
   scene.advanceAttack(scene.playerTwo, scene.playerOne, definitions.heavy.startupMs)
   assert.equal(scene.playerOne.health, 0)
   assert.equal(scene.playerOneHealthBar.fill.visible, false)
-  assert.equal(scene.winnerText.text, 'LYRA WINS')
+  assert.equal(scene.winnerText.text, 'LYRA THORNVALE WINS')
   assert.equal(scene.koSound.plays, 1)
   assert.equal(scene.hitSounds.reduce((sum, sound) => sum + sound.plays, 0), 0)
 })
