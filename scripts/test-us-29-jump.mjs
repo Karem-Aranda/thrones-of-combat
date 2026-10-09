@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import * as contact from '../src/game/combat/attackContact.ts'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -180,6 +181,7 @@ runInNewContext(compiledScene, {
     if (name === '../combat/comboDefinitions') return combos
     if (name === '../combat/blockDefinitions') return blocks
     if (name === '../presentation/fighterVisuals') return visuals
+    if (name === '../combat/attackContact') return contact
     throw new Error(`Unexpected scene dependency: ${name}`)
   },
   window: { matchMedia: () => ({ matches: false }) },
