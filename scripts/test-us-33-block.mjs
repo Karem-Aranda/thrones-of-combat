@@ -275,19 +275,23 @@ test('US-33 simultaneous attacks preserve P1-first damage/interruption', () => {
   assert.equal(s.playerTwo.attackState, 'idle')
 })
 
-test('US-33 touch Block is held, independent, and clears on release/cancel/out/portrait', () => {
+test('US-33 P1 touch Block clears on release/cancel/out/portrait independently of P2 keyboard Block', () => {
   for (const event of ['pointerup', 'pointerupoutside', 'pointercancel', 'gameout', 'portrait', 'pointerout']) {
     const s = makeScene(); setInputEnvironment(true); s.update(0, 0)
     const buttons = s.touchControls.buttons.filter(b => b.action === 'block')
-    assert.deepEqual(Array.from(buttons, b => [b.baseX, b.baseY]), [[520, 500], [760, 500]])
+    assert.equal(buttons[0].active, true)
+    assert.equal(buttons[1].active, false)
     buttons[0].zone.emit('pointerdown', { id: 1 }); buttons[1].zone.emit('pointerdown', { id: 2 })
+    assert.equal(s.touchControls.isHeld('playerTwo', 'block'), false)
+    s.blockKeys.playerTwo.isDown = true
     s.update(0, 0)
     assert.equal(s.playerOne.guardEligible, true); assert.equal(s.playerTwo.guardEligible, true)
     if (event === 'portrait') { setInputEnvironment(true, true); s.update(0, 0) }
     else if (event === 'pointerout') buttons[0].zone.emit(event, { id: 1 })
     else s.input.emit(event, { id: 1 })
     assert.equal(s.touchControls.isHeld('playerOne', 'block'), false)
-    if (event !== 'portrait' && event !== 'gameout') assert.equal(s.touchControls.isHeld('playerTwo', 'block'), true)
+    assert.equal(s.touchControls.isHeld('playerTwo', 'block'), false)
+    assert.equal(s.blockKeys.playerTwo.isDown, event !== 'portrait')
   }
 })
 

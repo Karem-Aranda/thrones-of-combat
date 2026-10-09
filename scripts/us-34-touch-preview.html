@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>US-34 — coarse-pointer browser fixture</title>
+    <!-- Match the production coarse-landscape padding in a desktop browser. -->
+    <style>@media (orientation: landscape) { #root > .app { padding: 0; } }</style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      // Test entry point only. Load the real React/Phaser app, marking the input
+      // as coarse without exposing or mutating scene/gameplay state. Mouse input
+      // exercises Phaser routing; this does NOT emulate real-finger multitouch.
+      const matchMedia = window.matchMedia.bind(window)
+      window.matchMedia = query => {
+        const result = matchMedia(query)
+        if (query !== '(any-pointer: coarse)') return result
+        return new Proxy(result, {
+          get(target, key) {
+            if (key === 'matches') return true
+            const value = Reflect.get(target, key, target)
+            return typeof value === 'function' ? value.bind(target) : value
+          },
+        })
+      }
+      await import('/src/main.tsx')
+    </script>
+  </body>
+</html>

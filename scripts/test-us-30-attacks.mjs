@@ -19,13 +19,24 @@ const KeyboardPlugin = phaserModule('input/keyboard/KeyboardPlugin')
 const JustDown = phaserModule('input/keyboard/keys/JustDown')
 const KeyCodes = phaserModule('input/keyboard/keys/KeyCodes')
 const EventEmitter = require('eventemitter3')
-const browserTarget = () => ({ addEventListener() {}, removeEventListener() {} })
+const browserTarget = () => {
+  const target = new EventEmitter()
+  target.addEventListener = target.on.bind(target)
+  target.removeEventListener = target.off.bind(target)
+  return target
+}
 let coarse = false
 let portrait = false
 export const setInputEnvironment = (touch, rotated = false) => { coarse = touch; portrait = rotated }
-const windowStub = {
-  ...browserTarget(), innerWidth: 1280, innerHeight: 720,
+const windowStub = Object.assign(browserTarget(), {
+  innerWidth: 1280, innerHeight: 720,
   matchMedia: query => ({ matches: query.includes('coarse') ? coarse : portrait }),
+})
+const documentStub = Object.assign(browserTarget(), { hidden: false })
+export const dispatchWindowEvent = type => windowStub.emit(type)
+export const setDocumentHidden = hidden => {
+  documentStub.hidden = hidden
+  documentStub.emit('visibilitychange')
 }
 const phaser = {
   Scene: class {},
@@ -54,7 +65,7 @@ const loadClass = (path, dependencies) => {
       if (name in dependencies) return dependencies[name]
       throw new Error(`Unexpected production dependency: ${name}`)
     },
-    window: windowStub, document: { ...browserTarget(), hidden: false },
+    window: windowStub, document: documentStub,
     console: { log() {} },
   })
   return exports
@@ -462,13 +473,15 @@ test('default attack records are clean and independent', () => {
   assert.notEqual(one, two)
 })
 
-test('actual touch zones converge with keyboard input and clear pointer/pending state', () => {
+test('P1 touch zones and both keyboards converge; P2 touch stays disabled in the mobile MVP', () => {
   const scene = makeScene()
   scene.touchControls.setPresentation(true, false, false)
   for (const player of ['playerOne', 'playerTwo']) {
     for (const id of ['light', 'heavy']) {
       const button = scene.touchControls.buttons.find(button => button.player === player && button.action === id)
       button.zone.emit('pointerdown', { id: 7 })
+      assert.equal(button.active, player === 'playerOne')
+      assert.equal(scene.touchControls.pendingAttack[player][id], player === 'playerOne')
       press(scene, player, id)
       assert.equal(input(scene, player)[`${id}Pressed`], true)
       assert.equal(input(scene, player)[`${id}Pressed`], false)
@@ -479,21 +492,23 @@ test('actual touch zones converge with keyboard input and clear pointer/pending 
   scene.touchControls.setPresentation(true, true, false)
   assert.equal(scene.touchControls.buttons.every(button => !button.active), true)
   scene.touchControls.setPresentation(true, false, false)
-  assert.equal(scene.touchControls.buttons.every(button => button.active), true)
+  assert.equal(scene.touchControls.buttons.every(button => button.active === (button.player === 'playerOne')), true)
 })
 
-test('twelve temporary touch controls are non-overlapping and safe at supported widths/insets', () => {
+test('four P1 action controls are non-overlapping, right-half and safe at supported widths/insets', () => {
   const scene = makeScene()
+  scene.touchControls.setPresentation(true, false, false)
   for (const width of [1280, 1558, 1600]) {
     for (const insets of [
       { left: 0, right: 0, top: 0, bottom: 0 },
       { left: 82, right: 82, top: 0, bottom: 39 },
     ]) {
       scene.touchControls.setViewport(width, 720, insets)
-      const buttons = scene.touchControls.buttons
-      assert.equal(buttons.length, 12)
+      const buttons = scene.touchControls.buttons.filter(button => button.active)
+      assert.equal(buttons.length, 4)
       for (const button of buttons) {
         assert.ok(button.zone.x - button.width / 2 >= insets.left)
+        assert.ok(button.zone.x - button.width / 2 >= width / 2)
         assert.ok(button.zone.x + button.width / 2 <= width - insets.right)
         assert.ok(button.zone.y + button.height / 2 <= 720 - insets.bottom)
         assert.equal(button.graphic.x, button.zone.x)
