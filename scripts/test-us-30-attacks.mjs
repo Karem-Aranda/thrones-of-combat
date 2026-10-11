@@ -12,6 +12,7 @@ import * as reactions from '../src/game/combat/hitReaction.ts'
 import * as combos from '../src/game/combat/comboDefinitions.ts'
 import * as blocks from '../src/game/combat/blockDefinitions.ts'
 import * as visuals from '../src/game/presentation/fighterVisuals.ts'
+import * as combatInput from '../src/game/controls/combatInput.ts'
 
 const { ATTACK_DEFINITIONS: definitions, createAttackRuntime, selectAttack } = attacks
 const require = createRequire(import.meta.url)
@@ -42,7 +43,7 @@ export const setDocumentHidden = hidden => {
 const phaser = {
   Scene: class {},
   Input: { Keyboard: { JustDown, KeyCodes } },
-  Scenes: { Events: { SHUTDOWN: 'shutdown' } },
+  Scenes: { Events: { SHUTDOWN: 'shutdown', PAUSE: 'pause', SLEEP: 'sleep', RESUME: 'resume', WAKE: 'wake' } },
   Scale: { Events: { RESIZE: 'resize' } },
   Math: { Clamp: (value, min, max) => Math.min(max, Math.max(min, value)) },
   Geom: {
@@ -72,6 +73,7 @@ const loadClass = (path, dependencies) => {
   return exports
 }
 const touchModule = loadClass('../src/game/controls/TouchControls.ts', { '../world/combatWorld': world })
+export const aiModule = loadClass('../src/game/ai/LyraController.ts', { '../controls/combatInput': combatInput })
 const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../world/combatWorld': world, '../combat/attackDefinitions': attacks,
   '../combat/attackContact': contact,
@@ -80,6 +82,8 @@ const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../combat/blockDefinitions': blocks,
   '../presentation/fighterVisuals': visuals,
   '../controls/TouchControls': touchModule,
+  '../controls/combatInput': combatInput,
+  '../ai/LyraController': aiModule,
 })
 
 const display = (x = 0, y = 0, width = 0, height = 0) => {
@@ -103,7 +107,7 @@ const display = (x = 0, y = 0, width = 0, height = 0) => {
   return object
 }
 
-export const makeScene = () => {
+export const makeScene = (mode = 'local-versus') => {
   coarse = false
   portrait = false
   const scene = new CombatScene()
@@ -142,11 +146,13 @@ export const makeScene = () => {
   scene.game = { canvas: { parentElement: null } }
   scene.handleScaleResize = () => {}
   scene.restarts = 0
-  scene.scene = { restart: () => {
+  scene.scene = { restart: data => {
     scene.events.emit('shutdown')
     scene.restarts++
+    scene.init(data)
     scene.create()
   } }
+  scene.init({ mode })
   scene.create()
   return scene
 }

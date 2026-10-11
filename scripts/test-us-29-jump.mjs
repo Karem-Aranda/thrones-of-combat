@@ -12,6 +12,7 @@ import * as blocks from '../src/game/combat/blockDefinitions.ts'
 import * as visuals from '../src/game/presentation/fighterVisuals.ts'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
 import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
+import * as combatInput from '../src/game/controls/combatInput.ts'
 import {
   GROUND_TOP, GRAVITY, JUMP_VELOCITY, WORLD_WIDTH, MAX_FIGHTER_SEPARATION,
   createVerticalMovement, advanceVerticalMovement, getFighterWorldSpawns,
@@ -175,6 +176,8 @@ runInNewContext(compiledScene, {
   require: name => {
     if (name === 'phaser') return { Scene: class {}, Input: { Keyboard: { JustDown } } }
     if (name === '../controls/TouchControls') return {}
+    if (name === '../ai/LyraController') return {}
+    if (name === '../controls/combatInput') return combatInput
     if (name === '../world/combatWorld') return combatWorld
     if (name === '../combat/attackDefinitions') return attackDefinitions
     if (name === '../combat/hitReaction') return hitReaction

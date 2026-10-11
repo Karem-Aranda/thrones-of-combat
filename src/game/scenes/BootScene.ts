@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { resolveGameMode } from '../controls/combatInput'
 import northwardSkyUrl from '../../assets/arena/northward-sky-wide.png'
 import northwardDistanceUrl from '../../assets/arena/northward-distance-wide.png'
 import northwardArchitectureUrl from '../../assets/arena/northward-architecture-wide.png'
@@ -49,6 +50,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('CombatScene')
+    // Temporary local test entry; US-39 owns the eventual player-facing menu.
+    const mode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('mode') : null
+    this.scene.start('CombatScene', { mode: resolveGameMode(mode) })
   }
 }
