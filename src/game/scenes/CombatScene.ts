@@ -1,4 +1,6 @@
 import Phaser from 'phaser'
+import { LyraController, type AIFighterObservation } from '../ai/LyraController'
+import { neutralFighterInput, resolveGameMode, type FighterInput, type GameMode, type CombatSceneData } from '../controls/combatInput'
 import { findAttackContact, type ContactMotion, type AttackContact } from '../combat/attackContact'
 import { JON_VISUALS, LYRA_VISUALS, createVisualRuntime, phaseFrame, type FighterVisualConfig, type FighterVisualRuntime } from '../presentation/fighterVisuals'
 import { createBlockReaction, guardEligible, guardFacesContact } from '../combat/blockDefinitions'
@@ -76,15 +78,6 @@ interface MovementKeys {
   jump: Phaser.Input.Keyboard.Key
 }
 
-interface FighterInput {
-  blockHeld: boolean
-  leftHeld: boolean
-  rightHeld: boolean
-  jumpPressed: boolean
-  lightPressed: boolean
-  heavyPressed: boolean
-}
-
 interface HealthBarDisplay {
   panel: Phaser.GameObjects.Image
   frame: Phaser.GameObjects.Rectangle
@@ -109,6 +102,13 @@ interface HitFleck {
 }
 
 export class CombatScene extends Phaser.Scene {
+  private mode: GameMode = 'local-versus'
+  private lyraAI?: LyraController
+  private aiSceneSuspended = false
+  private aiFocusSuspended = false
+  private aiWindowBlurred = false
+  private aiPortraitSuspended = false
+  private aiResumePending = false
   private blockKeys?: Record<PlayerId, Phaser.Input.Keyboard.Key>
   private playerOne!: Fighter
   private playerTwo!: Fighter
@@ -155,9 +155,21 @@ export class CombatScene extends Phaser.Scene {
     super('CombatScene')
   }
 
+  init(data: CombatSceneData = {}): void {
+    this.mode = resolveGameMode(data.mode)
+  }
+
   create(): void {
     // Scene restarts reuse this class instance; new fighters reset their own state.
     this.winner = null
+    this.lyraAI = this.mode === 'single-player' ? new LyraController({
+      fighterWidth: FIGHTER_WIDTH, worldWidth: WORLD_WIDTH, attacks: ATTACK_DEFINITIONS,
+    }) : undefined
+    this.aiSceneSuspended = false
+    this.aiWindowBlurred = document.hasFocus?.() === false
+    this.aiFocusSuspended = document.hidden || this.aiWindowBlurred
+    this.aiPortraitSuspended = false
+    this.aiResumePending = false
     this.impactCueElapsed = IMPACT_CUE_MS
     this.jonTrailElapsed = JON_TRAIL_MS
     this.snowflakes = []
@@ -257,6 +269,7 @@ export class CombatScene extends Phaser.Scene {
       playerTwo: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
     }
     this.clearKeyboardPresses()
+    this.clearPlayerTwoInput()
     for (const keys of Object.values(this.movementKeys)) keys.jump.on('down', this.recordJumpPress)
     for (const keys of Object.values(this.attackKeys)) {
       for (const key of Object.values(keys)) key.on('down', this.recordAttackPress)
@@ -265,8 +278,14 @@ export class CombatScene extends Phaser.Scene {
     keyboard.on('keydown', this.recordSemicolonPress)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupKeyboardInput, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.clearCombatState, this)
-    window.addEventListener('blur', this.clearKeyboardPresses)
-    document.addEventListener('visibilitychange', this.clearKeyboardPresses)
+    window.addEventListener('blur', this.handleFocusLoss)
+    window.addEventListener('focus', this.handleFocusReturn)
+    document.addEventListener('visibilitychange', this.handleVisibilityChange)
+    this.events.on(Phaser.Scenes.Events.PAUSE, this.suspendAI, this)
+    this.events.on(Phaser.Scenes.Events.SLEEP, this.suspendAI, this)
+    this.events.on(Phaser.Scenes.Events.RESUME, this.resumeAI, this)
+    this.events.on(Phaser.Scenes.Events.WAKE, this.resumeAI, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupAI, this)
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)
     this.touchControls = new TouchControls(this)
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleScaleResize, this)
@@ -296,14 +315,18 @@ export class CombatScene extends Phaser.Scene {
     const touchRestart = this.touchControls.consumeRestart()
     const restartPressed = keyboardRestart || touchRestart
     const playerOneInput = this.readFighterInput('playerOne', this.movementKeys.playerOne)
-    const playerTwoInput = this.readFighterInput('playerTwo', this.movementKeys.playerTwo)
+    const playerTwoHumanInput = this.readFighterInput('playerTwo', this.movementKeys.playerTwo)
+    if (portrait !== this.aiPortraitSuspended) {
+      this.aiPortraitSuspended = portrait
+      this.resetAIInput()
+    }
     if (portrait) {
       this.clearBlockInput()
       return
     }
     if (this.winner) {
       if (restartPressed) {
-        this.scene.restart()
+        this.scene.restart({ mode: this.mode })
         return
       }
       // Gameplay stays locked; existing airborne trajectories still settle naturally.
@@ -314,6 +337,9 @@ export class CombatScene extends Phaser.Scene {
       return
     }
 
+    // Exclusive ownership; ignored P2 human edges were drained above, never queued.
+    const playerTwoInput = this.mode === 'single-player'
+      ? this.readAIInput(delta) : playerTwoHumanInput
     const previousPlayerOneX = this.playerOne.container.x
     const previousPlayerTwoX = this.playerTwo.container.x
     // Snapshot BEFORE reaction expiry; only held blockstun permits re-guard.
@@ -403,6 +429,78 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
+  private observeFighter(fighter: Fighter): AIFighterObservation {
+    return {
+      x: fighter.container.x, grounded: fighter.vertical.movementState === 'grounded',
+      attackState: fighter.attackState, currentAttack: fighter.currentAttack,
+      reactionState: fighter.reaction.reactionState,
+    }
+  }
+
+  private readAIInput(delta: number): FighterInput {
+    if (!this.lyraAI || this.aiSceneSuspended || this.aiFocusSuspended || this.aiPortraitSuspended) {
+      return neutralFighterInput()
+    }
+    const elapsed = this.aiResumePending ? 0 : delta
+    this.aiResumePending = false // Never catch up suspended time with historical decisions.
+    return this.lyraAI.update({
+      self: this.observeFighter(this.playerTwo), opponent: this.observeFighter(this.playerOne),
+      matchActive: this.winner === null,
+    }, elapsed)
+  }
+
+  private clearPlayerTwoInput(): void {
+    for (const key of Object.values(this.movementKeys?.playerTwo ?? {})) key.reset()
+    for (const key of Object.values(this.attackKeys?.playerTwo ?? {})) key.reset()
+    this.blockKeys?.playerTwo.reset()
+    this.pendingKeyboardJump.playerTwo = false
+    this.pendingKeyboardAttacks.playerTwo = { light: false, heavy: false }
+  }
+
+  private resetAIInput(): void {
+    this.lyraAI?.reset()
+    this.aiResumePending = true
+    if (this.mode === 'single-player') this.clearPlayerTwoInput()
+  }
+
+  private suspendAI = (): void => {
+    this.aiSceneSuspended = true
+    this.resetAIInput()
+  }
+
+  private resumeAI = (): void => {
+    this.aiSceneSuspended = false
+    this.resetAIInput()
+  }
+
+  private handleFocusLoss = (): void => {
+    this.clearKeyboardPresses()
+    this.aiWindowBlurred = true
+    this.aiFocusSuspended = true
+    this.resetAIInput()
+  }
+
+  private handleFocusReturn = (): void => {
+    this.aiWindowBlurred = false
+    this.aiFocusSuspended = document.hidden
+    this.resetAIInput()
+  }
+
+  private handleVisibilityChange = (): void => {
+    this.clearKeyboardPresses()
+    this.aiFocusSuspended = document.hidden || this.aiWindowBlurred
+    this.resetAIInput()
+  }
+
+  private cleanupAI(): void {
+    this.resetAIInput()
+    this.lyraAI = undefined
+    this.events.off(Phaser.Scenes.Events.PAUSE, this.suspendAI, this)
+    this.events.off(Phaser.Scenes.Events.SLEEP, this.suspendAI, this)
+    this.events.off(Phaser.Scenes.Events.RESUME, this.resumeAI, this)
+    this.events.off(Phaser.Scenes.Events.WAKE, this.resumeAI, this)
+  }
+
   private clearKeyboardPresses = (): void => {
     this.clearBlockInput()
     this.pendingKeyboardJump.playerOne = false
@@ -438,8 +536,9 @@ export class CombatScene extends Phaser.Scene {
       for (const key of Object.values(keys)) key.off('down', this.recordAttackPress)
     }
     this.input.keyboard?.off('keydown', this.recordSemicolonPress)
-    window.removeEventListener('blur', this.clearKeyboardPresses)
-    document.removeEventListener('visibilitychange', this.clearKeyboardPresses)
+    window.removeEventListener('blur', this.handleFocusLoss)
+    window.removeEventListener('focus', this.handleFocusReturn)
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
     this.clearKeyboardPresses()
   }
 
@@ -977,6 +1076,7 @@ export class CombatScene extends Phaser.Scene {
     if (this.winner) return
 
     this.winner = winner
+    this.resetAIInput()
     this.touchControls.setPresentation(
       window.matchMedia('(any-pointer: coarse)').matches,
       false,
