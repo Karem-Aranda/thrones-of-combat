@@ -13,6 +13,7 @@ import * as combos from '../src/game/combat/comboDefinitions.ts'
 import * as blocks from '../src/game/combat/blockDefinitions.ts'
 import * as visuals from '../src/game/presentation/fighterVisuals.ts'
 import * as combatInput from '../src/game/controls/combatInput.ts'
+import * as menuMotion from '../src/game/menu/menuMotion.ts'
 
 const { ATTACK_DEFINITIONS: definitions, createAttackRuntime, selectAttack } = attacks
 const require = createRequire(import.meta.url)
@@ -83,6 +84,7 @@ const { CombatScene } = loadClass('../src/game/scenes/CombatScene.ts', {
   '../presentation/fighterVisuals': visuals,
   '../controls/TouchControls': touchModule,
   '../controls/combatInput': combatInput,
+  '../menu/menuMotion': menuMotion,
   '../ai/LyraController': aiModule,
 })
 
@@ -107,7 +109,7 @@ const display = (x = 0, y = 0, width = 0, height = 0) => {
   return object
 }
 
-export const makeScene = (mode = 'local-versus') => {
+export const makeScene = (mode = 'local-versus', data = {}) => {
   coarse = false
   portrait = false
   const scene = new CombatScene()
@@ -142,6 +144,8 @@ export const makeScene = (mode = 'local-versus') => {
   camera.setBounds = () => camera
   camera.setZoom = zoom => { camera.zoom = zoom; return camera }
   camera.setScroll = (x, y) => { camera.scrollX = x; camera.scrollY = y; return camera }
+  camera.fades = []
+  camera.fadeIn = (...args) => { camera.fades.push(args); return camera }
   scene.cameras = { main: camera }
   scene.game = { canvas: { parentElement: null } }
   scene.handleScaleResize = () => {}
@@ -152,7 +156,7 @@ export const makeScene = (mode = 'local-versus') => {
     scene.init(data)
     scene.create()
   } }
-  scene.init({ mode })
+  scene.init({ ...data, mode })
   scene.create()
   return scene
 }

@@ -1,0 +1,562 @@
+{
+  "date": "2026-10-18",
+  "visualApproval": "Product Owner 10/10; extraction/normalization subject to Planner fidelity review",
+  "integrationAuthorized": false,
+  "commercialClearance": "Unresolved",
+  "titleStatus": "BLOCKED; omitted from runtime exports",
+  "fontsSupplied": false,
+  "files": [
+    {
+      "file": "exports/backgrounds/corridor-desktop-fallback.jpg",
+      "width": 1672,
+      "height": 941,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "jpeg",
+      "bytes": 369199,
+      "KiB": 360.55,
+      "decodedRGBA8Bytes": 6293408,
+      "sha256": "5c9e203b5a4e6b040adc12a98ef4ffb7a8607404b0c2c14b601bcf9adb12cd5c",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/corridor-master.png",
+        "sourceSHA256": "fc76fe49f1b5577ecdaa88917def38f93feb7d5a6be85118c60050d89a9901c4",
+        "method": "Native-size encode; no crop"
+      }
+    },
+    {
+      "file": "exports/backgrounds/corridor-desktop.webp",
+      "width": 1672,
+      "height": 941,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "webp",
+      "bytes": 362766,
+      "KiB": 354.26,
+      "decodedRGBA8Bytes": 6293408,
+      "sha256": "e5f1a941dc02425aac24cc0ecf1a175d0a8823a1cfd95aa7bd1552d01fbcd8dc",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/corridor-master.png",
+        "sourceSHA256": "fc76fe49f1b5577ecdaa88917def38f93feb7d5a6be85118c60050d89a9901c4",
+        "method": "Native-size encode; no crop"
+      }
+    },
+    {
+      "file": "exports/backgrounds/corridor-mobile-fallback.jpg",
+      "width": 1280,
+      "height": 592,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "jpeg",
+      "bytes": 171871,
+      "KiB": 167.84,
+      "decodedRGBA8Bytes": 3031040,
+      "sha256": "040bebc8bb24bc2327cb2c1ad4a58c5fbb4d0d2773dddd99f68f67e81ba83c6c",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/corridor-master.png",
+        "sourceSHA256": "fc76fe49f1b5577ecdaa88917def38f93feb7d5a6be85118c60050d89a9901c4",
+        "method": "Documented crop (0,72,1672,773), resize1280x592, encode; no generative changes"
+      }
+    },
+    {
+      "file": "exports/backgrounds/corridor-mobile.webp",
+      "width": 1280,
+      "height": 592,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "webp",
+      "bytes": 168144,
+      "KiB": 164.2,
+      "decodedRGBA8Bytes": 3031040,
+      "sha256": "14e8d3ae802bf33cd55f60d4db07be3fee6bdcea9ff582a113940326663a9e47",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/corridor-master.png",
+        "sourceSHA256": "fc76fe49f1b5577ecdaa88917def38f93feb7d5a6be85118c60050d89a9901c4",
+        "method": "Documented crop (0,72,1672,773), resize1280x592, encode; no generative changes"
+      }
+    },
+    {
+      "file": "exports/ui/button-focused.webp",
+      "width": 1024,
+      "height": 256,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "webp",
+      "bytes": 43844,
+      "KiB": 42.82,
+      "decodedRGBA8Bytes": 1048576,
+      "sha256": "8cbc9920630abcc37fd87b5c14c6257820b3a435d632a516dbd6a65a8c98b078",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "exports/ui/button-neutral.webp",
+      "width": 1024,
+      "height": 256,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "webp",
+      "bytes": 40480,
+      "KiB": 39.53,
+      "decodedRGBA8Bytes": 1048576,
+      "sha256": "b372a660eb7a2141bbb8875ea065e70a93960b0c2d88e196eddd3551b9ae36d6",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "exports/ui/button-pressed.webp",
+      "width": 1024,
+      "height": 256,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "webp",
+      "bytes": 40422,
+      "KiB": 39.47,
+      "decodedRGBA8Bytes": 1048576,
+      "sha256": "ce7f39e520aaf48e2e3f99b84957fbb4d46d012edc8fe94261c44053f3f7896a",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "exports/ui/buttons-atlas.png",
+      "width": 512,
+      "height": 384,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 251451,
+      "KiB": 245.56,
+      "decodedRGBA8Bytes": 786432,
+      "sha256": "fb89154700cb0d7fd8e0f15380f052736c4983879ccde6fee2b7752bc8c81dd0",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "exports/ui/buttons-atlas.webp",
+      "width": 512,
+      "height": 384,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "webp",
+      "bytes": 20038,
+      "KiB": 19.57,
+      "decodedRGBA8Bytes": 786432,
+      "sha256": "f9592e859e72eac463ba9d0721d4a5ab6aa2db5b1b2ddfb88e0f063de4de262e",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "masters/button-focused.png",
+      "width": 1024,
+      "height": 256,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 347741,
+      "KiB": 339.59,
+      "decodedRGBA8Bytes": 1048576,
+      "sha256": "a932606aa0c8fb10ee80ba61d13229b4b87b693a9039b21dc4f02fe4873e37b8",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "masters/button-neutral.png",
+      "width": 1024,
+      "height": 256,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 357974,
+      "KiB": 349.58,
+      "decodedRGBA8Bytes": 1048576,
+      "sha256": "1d628bbbefb354873efc60e3251850ec3054f5e9c4c0bb19c27eb540cbb5e1e8",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "masters/button-pressed.png",
+      "width": 1024,
+      "height": 256,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 343029,
+      "KiB": 334.99,
+      "decodedRGBA8Bytes": 1048576,
+      "sha256": "bf4e703164fb863680da67d09bbc41be53810bf8a5cc20736417d21ff4b42f55",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "masters/buttons-atlas.png",
+      "width": 1024,
+      "height": 768,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 1046848,
+      "KiB": 1022.31,
+      "decodedRGBA8Bytes": 3145728,
+      "sha256": "0801570b7e5d175d3c81b14bda47963c66a143da07400f997fb86afdba8b2956",
+      "provenance": {
+        "inputs": [
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-neutral.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-focused.png",
+          "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/button-pressed.png"
+        ],
+        "method": "Existing generated plates; remote-alpha cleanup, common bbox resampling, shared alpha intersection, padding; see tools/finalize.cjs and qa/processing-measurements.json"
+      }
+    },
+    {
+      "file": "masters/corridor-master.png",
+      "width": 1672,
+      "height": 941,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "png",
+      "bytes": 2848496,
+      "KiB": 2781.73,
+      "decodedRGBA8Bytes": 6293408,
+      "sha256": "fc76fe49f1b5577ecdaa88917def38f93feb7d5a6be85118c60050d89a9901c4",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/candidates/corridor-master.png",
+        "sourceSHA256": "fc76fe49f1b5577ecdaa88917def38f93feb7d5a6be85118c60050d89a9901c4",
+        "method": "Exact source copy"
+      }
+    },
+    {
+      "file": "qa/BLOCKED-title-extraction.png",
+      "width": 1978,
+      "height": 795,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 1700603,
+      "KiB": 1660.75,
+      "decodedRGBA8Bytes": 6290040,
+      "sha256": "7ef480f45df0b3a357aeb0a58c23156688973a275e1734a0ac4d9ac809952085",
+      "provenance": {
+        "input": "/Users/karemara/.codex/generated_images/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/exec-50eb38fb-f362-45e3-a10c-7d2009a2bff1.png",
+        "method": "Exact copy of failed built-in image-generation attempt; see GENERATION-PROMPT.md",
+        "status": "Evidence only, not runtime"
+      }
+    },
+    {
+      "file": "qa/approved-title-crop.png",
+      "width": 510,
+      "height": 205,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "png",
+      "bytes": 199703,
+      "KiB": 195.02,
+      "decodedRGBA8Bytes": 418200,
+      "sha256": "ad1fc5ad2210b24f1b983777d89edc962acbda29f3eeaa26621ebfd0543d6ffd",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "qa/atlas-alpha-dark-light.png",
+      "width": 1048,
+      "height": 408,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 318135,
+      "KiB": 310.68,
+      "decodedRGBA8Bytes": 1710336,
+      "sha256": "a7419b8da9bf02f28e03c5c5678a51fa2c4965e40a87b32f7916834ac835be4f",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "qa/background-desktop-fidelity.png",
+      "width": 1624,
+      "height": 474,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 1811937,
+      "KiB": 1769.47,
+      "decodedRGBA8Bytes": 3079104,
+      "sha256": "5021b3c3d30e25042d3fdd2e7d699ab45ecbc2926bf547f26c6869d917138605",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "qa/background-mobile-fidelity.png",
+      "width": 1304,
+      "height": 320,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 948594,
+      "KiB": 926.36,
+      "decodedRGBA8Bytes": 1669120,
+      "sha256": "5ae130f6dff9680cd70005e42c6c354e705b07121d15697c41d8e8cd416bdf57",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "qa/buttons-fidelity.png",
+      "width": 1324,
+      "height": 594,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 996614,
+      "KiB": 973.26,
+      "decodedRGBA8Bytes": 3145824,
+      "sha256": "ee11e9a454af4575f480c219ee6cc505d72edc21244c8c237b9779b5c731b90d",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "qa/buttons-normalized-preview.png",
+      "width": 1600,
+      "height": 850,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 628688,
+      "KiB": 613.95,
+      "decodedRGBA8Bytes": 5440000,
+      "sha256": "d53b0f9b226077facb199b0b6d0b8138548494aebb5b4fd085621f2a99a41ef0",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "qa/title-fidelity.png",
+      "width": 1304,
+      "height": 304,
+      "channels": 4,
+      "hasAlpha": true,
+      "format": "png",
+      "bytes": 547526,
+      "KiB": 534.69,
+      "decodedRGBA8Bytes": 1585664,
+      "sha256": "724c5d8ab343771a0112878e46e47ed3265ff21c8f51cb67c014be0fee737d07",
+      "provenance": {
+        "inputs": [
+          "references/desktop-menu-proof.png",
+          "references/button-states-context-proof.png",
+          "masters/corridor-master.png",
+          "masters/button-neutral.png",
+          "masters/button-focused.png",
+          "masters/button-pressed.png"
+        ],
+        "method": "Offline evidence crop/contact-sheet comparison; tools/inspect.cjs and tools/qa.cjs"
+      }
+    },
+    {
+      "file": "references/button-states-context-proof.png",
+      "width": 1672,
+      "height": 941,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "png",
+      "bytes": 2211204,
+      "KiB": 2159.38,
+      "decodedRGBA8Bytes": 6293408,
+      "sha256": "46704cdb3ccae1a24993050a501793442a9db3a5df4f5c8aa105b95d98b0a54d",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/references/button-states-context-proof.png",
+        "method": "Exact approved reference copy"
+      }
+    },
+    {
+      "file": "references/desktop-menu-proof.png",
+      "width": 1672,
+      "height": 941,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "png",
+      "bytes": 2407936,
+      "KiB": 2351.5,
+      "decodedRGBA8Bytes": 6293408,
+      "sha256": "f046c73b4978133109227b569ab84fb5fdda6c650bb7483a993efe47d88734f5",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/references/desktop-menu-proof.png",
+        "method": "Exact approved reference copy"
+      }
+    },
+    {
+      "file": "references/mobile-landscape-menu-proof.png",
+      "width": 1844,
+      "height": 853,
+      "channels": 3,
+      "hasAlpha": false,
+      "format": "png",
+      "bytes": 2550327,
+      "KiB": 2490.55,
+      "decodedRGBA8Bytes": 6291728,
+      "sha256": "5776bea8768708151033b6095ad5358eacfb1cd359a1dae124970b064c6df20a",
+      "provenance": {
+        "input": "/Users/karemara/.codex/visualizations/2026/09/27/01a0e0e7-fe92-7862-9b01-febc8ad03ec8/us39-approved-handoff-2026-10-18/references/mobile-landscape-menu-proof.png",
+        "method": "Exact approved reference copy"
+      }
+    }
+  ],
+  "budgets": [
+    {
+      "file": "exports/backgrounds/corridor-desktop.webp",
+      "budgetKiB": 700,
+      "actualKiB": 354.26,
+      "pass": true
+    },
+    {
+      "file": "exports/backgrounds/corridor-mobile.webp",
+      "budgetKiB": 350,
+      "actualKiB": 164.2,
+      "pass": true
+    },
+    {
+      "file": "exports/ui/buttons-atlas.webp",
+      "budgetKiB": 160,
+      "actualKiB": 19.57,
+      "pass": true
+    },
+    {
+      "file": "exports/backgrounds/corridor-desktop-fallback.jpg",
+      "budgetKiB": 700,
+      "actualKiB": 360.55,
+      "pass": true
+    },
+    {
+      "file": "exports/backgrounds/corridor-mobile-fallback.jpg",
+      "budgetKiB": 350,
+      "actualKiB": 167.84,
+      "pass": true
+    },
+    {
+      "file": "exports/ui/buttons-atlas.png",
+      "budgetKiB": 160,
+      "actualKiB": 245.56,
+      "pass": false
+    }
+  ],
+  "scope": "Exports are review candidates; choose individual textures OR atlas, not both.",
+  "dataFiles": [
+    {
+      "file": "exports/ui/buttons-atlas.json",
+      "bytes": 1216,
+      "sha256": "576d667471a9307d1e966faa987974d324791f43e4e7e454692d2d45ab642207"
+    },
+    {
+      "file": "exports/ui/registration.json",
+      "bytes": 736,
+      "sha256": "be9f8488c885f89a18a4723e0dd306e41246669ae196d902343bddcfef83bb9e"
+    },
+    {
+      "file": "qa/processing-measurements.json",
+      "bytes": 2768,
+      "sha256": "dc3b66c553be5f743def2309e3cc8d1962809aefe054f9e22e402ed9611960f2"
+    },
+    {
+      "file": "qa/technical-qa.json",
+      "bytes": 3657,
+      "sha256": "d5f481aaab08fceb88c1c4c4fad6a671078cf9d096d3d18dc4df75b1a244b4ad"
+    }
+  ]
+}

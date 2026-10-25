@@ -13,6 +13,7 @@ import * as visuals from '../src/game/presentation/fighterVisuals.ts'
 import * as combatWorld from '../src/game/world/combatWorld.ts'
 import * as attackDefinitions from '../src/game/combat/attackDefinitions.ts'
 import * as combatInput from '../src/game/controls/combatInput.ts'
+import * as menuMotion from '../src/game/menu/menuMotion.ts'
 import {
   GROUND_TOP, GRAVITY, JUMP_VELOCITY, WORLD_WIDTH, MAX_FIGHTER_SEPARATION,
   createVerticalMovement, advanceVerticalMovement, getFighterWorldSpawns,
@@ -178,6 +179,7 @@ runInNewContext(compiledScene, {
     if (name === '../controls/TouchControls') return {}
     if (name === '../ai/LyraController') return {}
     if (name === '../controls/combatInput') return combatInput
+    if (name === '../menu/menuMotion') return menuMotion
     if (name === '../world/combatWorld') return combatWorld
     if (name === '../combat/attackDefinitions') return attackDefinitions
     if (name === '../combat/hitReaction') return hitReaction

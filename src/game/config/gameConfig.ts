@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { BootScene } from '../scenes/BootScene'
 import { CombatScene } from '../scenes/CombatScene'
+import { MainMenuScene } from '../scenes/MainMenuScene'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../world/combatWorld'
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
@@ -10,7 +11,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   parent: 'game-container',
   backgroundColor: '#111111',
   input: { activePointers: 6 },
-  scene: [BootScene, CombatScene],
+  scene: [BootScene, MainMenuScene, CombatScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { MENU_MOTION } from '../menu/menuMotion'
 import { LyraController, type AIFighterObservation } from '../ai/LyraController'
 import { neutralFighterInput, resolveGameMode, type FighterInput, type GameMode, type CombatSceneData } from '../controls/combatInput'
 import { findAttackContact, type ContactMotion, type AttackContact } from '../combat/attackContact'
@@ -102,6 +103,7 @@ interface HitFleck {
 }
 
 export class CombatScene extends Phaser.Scene {
+  private menuReveal = false
   private mode: GameMode = 'local-versus'
   private lyraAI?: LyraController
   private aiSceneSuspended = false
@@ -157,6 +159,7 @@ export class CombatScene extends Phaser.Scene {
 
   init(data: CombatSceneData = {}): void {
     this.mode = resolveGameMode(data.mode)
+    this.menuReveal = data.menuReveal === true
   }
 
   create(): void {
@@ -303,6 +306,10 @@ export class CombatScene extends Phaser.Scene {
       this.parentResizeObserver.observe(parent)
     }
     this.handleScaleResize()
+    if (this.menuReveal && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.cameras.main.fadeIn(MENU_MOTION.combatRevealMs, ...MENU_MOTION.midnight)
+    }
+    this.menuReveal = false
   }
 
   update(_time: number, delta: number): void {
