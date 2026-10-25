@@ -9,7 +9,7 @@ export interface FighterInput {
 }
 
 export type GameMode = 'local-versus' | 'single-player'
-export interface CombatSceneData { mode?: GameMode }
+export interface CombatSceneData { mode?: GameMode; menuReveal?: boolean }
 
 export function resolveGameMode(mode: unknown): GameMode {
   return mode === 'single-player' ? mode : 'local-versus'

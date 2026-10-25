@@ -1,0 +1,74 @@
+{
+  "frames": {
+    "neutral": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 128
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 128
+      },
+      "sourceSize": {
+        "w": 512,
+        "h": 128
+      }
+    },
+    "focused": {
+      "frame": {
+        "x": 0,
+        "y": 128,
+        "w": 512,
+        "h": 128
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 128
+      },
+      "sourceSize": {
+        "w": 512,
+        "h": 128
+      }
+    },
+    "pressed": {
+      "frame": {
+        "x": 0,
+        "y": 256,
+        "w": 512,
+        "h": 128
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 128
+      },
+      "sourceSize": {
+        "w": 512,
+        "h": 128
+      }
+    }
+  },
+  "meta": {
+    "app": "US39 offline design handoff",
+    "image": "buttons-atlas.webp",
+    "format": "RGBA8888",
+    "size": {
+      "w": 512,
+      "h": 384
+    },
+    "scale": "1"
+  }
+}
